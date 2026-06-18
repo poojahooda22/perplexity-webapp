@@ -444,5 +444,9 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
 });
 
 
-const PORT = Number(process.env.PORT) || 3001;
-app.listen(PORT, () => console.log(`backend listening on http://localhost:${PORT}`));
+if (!process.env.VERCEL) {
+    const PORT = Number(process.env.PORT) || 3001;
+    app.listen(PORT, () => console.log(`backend listening on http://localhost:${PORT}`));
+}
+
+export default app;
