@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Theme tokens ported from the rare-lab design system.
+ * rare-lab is Tailwind v3 + `--rare-*` tokens; this project is Tailwind v4 + shadcn
+ * semantic tokens, so we map rare-lab's grayscale PALETTE onto the shadcn token names
+ * our UI primitives already consume. Same look, compatible stack.
+ *
+ * rare-lab gray scale used below:
+ *   25 #fafafc · 50 #f2f3f5 · 100 #dcdce0 · 200 #bebec2 · 300 #a5a5a8 · 400 #7f8085
+ *   500 #6c6c70 · 600 #535357 · 700 #3e3f42 · 800 #2b2b2e · 900 #1d1d1f · 950 #131314
+ */
+
+@theme inline {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "DM Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ── Light theme (rare-lab light palette) ─────────────────────────────── */
+:root {
+  --radius: 0.75rem;
+
+  --background: #ffffff;
+  --foreground: #1d1d1f;
+
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+
+  --primary: #1d1d1f;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f2f3f5;
+  --secondary-foreground: #3e3f42;
+
+  --muted: #f2f3f5;
+  --muted-foreground: #6c6c70;
+
+  --accent: #f2f3f5;
+  --accent-foreground: #1d1d1f;
+
+  --destructive: #d92d20;
+
+  --border: #dcdce0;
+  --input: #dcdce0;
+  --ring: #a5a5a8;
+
+  --chart-1: #535357;
+  --chart-2: #6c6c70;
+  --chart-3: #7f8085;
+  --chart-4: #a5a5a8;
+  --chart-5: #bebec2;
+
+  --sidebar: #f7f8f9;
+  --sidebar-foreground: #535357;
+  --sidebar-primary: #1d1d1f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e9eaec;
+  --sidebar-accent-foreground: #1d1d1f;
+  --sidebar-border: #dcdce0;
+  --sidebar-ring: #a5a5a8;
+}
+
+/* ── Dark theme (rare-lab dark palette — default) ─────────────────────── */
+.dark {
+  --background: #131314;
+  --foreground: #f2f3f5;
+
+  --card: #1d1d1f;
+  --card-foreground: #f2f3f5;
+  --popover: #1d1d1f;
+  --popover-foreground: #f2f3f5;
+
+  --primary: #f2f3f5;
+  --primary-foreground: #1d1d1f;
+
+  --secondary: #2b2b2e;
+  --secondary-foreground: #f2f3f5;
+
+  --muted: #1d1d1f;
+  --muted-foreground: #a5a5a8;
+
+  --accent: #2b2b2e;
+  --accent-foreground: #f2f3f5;
+
+  --destructive: #f97066;
+
+  --border: #2b2b2e;
+  --input: #3e3f42;
+  --ring: #6c6c70;
+
+  --chart-1: #2b2b2e;
+  --chart-2: #535357;
+  --chart-3: #7f8085;
+  --chart-4: #a5a5a8;
+  --chart-5: #f2f3f5;
+
+  --sidebar: #131314;
+  --sidebar-foreground: #a5a5a8;
+  --sidebar-primary: #f2f3f5;
+  --sidebar-primary-foreground: #1d1d1f;
+  --sidebar-accent: #1d1d1f;
+  --sidebar-accent-foreground: #f2f3f5;
+  --sidebar-border: #2b2b2e;
+  --sidebar-ring: #6c6c70;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* View Transitions — circular clip-path reveal for the theme toggle (ported from rare-lab).
+   Disable the default cross-fade and stack the new snapshot on top; the toggle's JS
+   animates the new layer's clip-path from a 0px circle to full-screen. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 9999;
+}

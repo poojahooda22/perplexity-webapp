@@ -1,0 +1,11 @@
+node_modules
+.env.local
+.env
+.agents/
+dist/
+out/
+.DS_Store
+.idea/
+*.log
+bun.lockb
+*.local
