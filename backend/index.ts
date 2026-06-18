@@ -71,9 +71,13 @@ async function webSearch(query: string) {
     // prompt still goes to the LLM (no cap there) — we only trim the search string.
     const searchQuery = query.length > 400 ? query.slice(0, 400) : query;
     const response = await tavily_client.search(searchQuery, {
-        searchDepth: "advanced",
+        // "basic" is ~1.5-2.5s faster than "advanced" and is plenty for general queries —
+        // the single biggest latency win on the miss path. Bump back to "advanced" only
+        // for query types that genuinely need deeper extraction.
+        searchDepth: "basic",
         includeImages: true,
-        // Cast a wide net across the whole web (github, stackoverflow, reddit, youtube, docs…).
+        // Wide net across the web (github, stackoverflow, reddit, youtube, docs…). Lower this
+        // toward ~6 if you want a smaller prompt + faster first token at some breadth cost.
         maxResults: 10,
     });
     const results = response.results;
@@ -282,8 +286,10 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             });
         }
 
-        // Persist the user's message.
-        await prisma.message.create({
+        // Persist the user's message WITHOUT blocking the search. We await this promise
+        // only just before writing the assistant turn, so the autoincrement message order
+        // stays correct while this write overlaps the slow search + LLM call.
+        const persistUserTurn = prisma.message.create({
             data: { content: query, role: "user", conversationId: conversation.id },
         });
 
@@ -302,6 +308,7 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             res.write(cached.answer);
             writeSources(res, cached.sources);
             res.end();
+            await persistUserTurn; // ensure the user turn lands before the assistant turn
             await prisma.message.create({
                 data: { content: cached.answer, role: "Assistant", conversationId: conversation.id },
             });
@@ -339,8 +346,10 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
         // step 8 - close the stream
         res.end();
 
-        // step 9 - persist the FULL payload (answer + sources + images) so a history reload
-        //          keeps the links/images, then populate the cache. Skip empty (failed) answers.
+        // step 9 - persist both turns (user turn was started earlier) + populate the cache,
+        //          all after the client already has its answer. Await the user turn first so
+        //          its autoincrement id stays below the assistant turn's (correct ordering).
+        await persistUserTurn;
         if (fullAnswer.trim()) {
             await prisma.message.create({
                 data: { content: fullAnswer + tail, role: "Assistant", conversationId: conversation.id },
@@ -394,8 +403,10 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
             content: m.content,
         }));
 
-        // Persist the new user turn.
-        await prisma.message.create({
+        // Persist the new user turn WITHOUT blocking the search. `history` above is built from
+        // the already-stored turns, so this write isn't needed until we save the assistant
+        // reply — awaited later to preserve message order.
+        const persistUserTurn = prisma.message.create({
             data: { content: query, role: "user", conversationId: conversation.id },
         });
 
@@ -427,6 +438,9 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
         res.write(tail);
         res.end();
 
+        // persist both turns (user turn was started earlier) after the client has its answer;
+        // await the user turn first so its id stays below the assistant turn's (correct order)
+        await persistUserTurn;
         // persist the FULL payload (answer + sources + images); skip empties from a failed generation
         if (fullAnswer.trim()) {
             await prisma.message.create({

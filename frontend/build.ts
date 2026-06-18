@@ -14,6 +14,9 @@ const result = await Bun.build({
   minify: true,
   target: "browser",
   sourcemap: "linked",
+  // Inline public config into the browser bundle at build time (Supabase URL/key,
+  // backend URL). Set these as BUN_PUBLIC_* env vars in the Vercel project.
+  env: "BUN_PUBLIC_*",
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },

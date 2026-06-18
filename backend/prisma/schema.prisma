@@ -4,7 +4,9 @@ generator client {
   provider = "prisma-client"
   output   = "./generated/prisma"
   engineType = "client"
-  runtime = "bun"
+  // "nodejs" so the generated client runs on Vercel's Node serverless runtime.
+  // (Still runs fine under Bun locally — Bun is Node-compatible.)
+  runtime = "nodejs"
 }
 
 datasource db {
