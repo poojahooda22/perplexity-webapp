@@ -11,6 +11,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // NOTE: pgvector is enabled directly in Supabase (Dashboard → Database → Extensions,
+  // or `CREATE EXTENSION vector`). We deliberately do NOT let Prisma manage extensions
+  // (`extensions = [...]`) — on Supabase that makes `prisma migrate dev` flag Supabase's
+  // own pre-installed extensions as "drift" and threaten a destructive reset.
 }
 
 
@@ -33,10 +37,30 @@ model Conversation {
   title           String?
   slug            String
   userId          String
+  createdAt       DateTime        @default(now())   // sidebar can now sort newest-first
   messages        Message[]
   user            User           @relation(fields: [userId], references: [id])
-  
 
+
+}
+
+// Semantic cache for /perplexity_ask. One row per answered query, keyed by the
+// query's embedding. A new query is embedded and compared (cosine distance via
+// pgvector's <=>) against these rows; a close-enough, non-stale row is replayed
+// instead of paying for a fresh Tavily search + LLM generation.
+// Accessed ONLY via $queryRaw/$executeRaw (the `embedding` vector type isn't part
+// of Prisma's typed client), so this model exists mainly to drive the migration.
+model CachedQuery {
+  id        String                      @id @default(uuid())
+  queryText String                      @map("query_text")
+  model     String                                            // cache is keyed on (embedding, model)
+  embedding Unsupported("vector(1536)")                       // 1536 = text-embedding-3-small
+  answer    String
+  sources   Json
+  images    Json
+  createdAt DateTime                    @default(now())       @map("created_at")
+
+  @@map("cached_query")
 }
 
 model Message {

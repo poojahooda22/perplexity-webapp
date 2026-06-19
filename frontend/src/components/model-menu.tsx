@@ -57,15 +57,6 @@ export function ModelMenu({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" side="bottom" sideOffset={8} className="w-64 p-1.5">
-        <a
-          href="https://www.perplexity.ai/settings/account"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mb-1 flex items-center justify-between rounded-lg border border-border bg-accent/50 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-        >
-          Access the top AI models
-          <ArrowRight className="size-4 text-muted-foreground" />
-        </a>
 
         {MODELS.map((model) => {
           const Icon = model.icon;

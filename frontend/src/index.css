@@ -37,6 +37,30 @@
   }
 }
 
+/* Radix accordion expand/collapse (Market Summary). */
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+.acc-content[data-state="open"] {
+  animation: accordion-down 0.22s ease-out;
+}
+.acc-content[data-state="closed"] {
+  animation: accordion-up 0.18s ease-out;
+}
+
 @media (prefers-reduced-motion) {
   *,
   ::before,

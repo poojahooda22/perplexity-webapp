@@ -386,6 +386,7 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 export const ModelName = {
   User: 'User',
   Conversation: 'Conversation',
+  CachedQuery: 'CachedQuery',
   Message: 'Message'
 } as const
 
@@ -402,7 +403,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "conversation" | "message"
+    modelProps: "user" | "conversation" | "cachedQuery" | "message"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -554,6 +555,64 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    CachedQuery: {
+      payload: Prisma.$CachedQueryPayload<ExtArgs>
+      fields: Prisma.CachedQueryFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.CachedQueryFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.CachedQueryFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload>
+        }
+        findFirst: {
+          args: Prisma.CachedQueryFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.CachedQueryFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload>
+        }
+        findMany: {
+          args: Prisma.CachedQueryFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload>[]
+        }
+        delete: {
+          args: Prisma.CachedQueryDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload>
+        }
+        update: {
+          args: Prisma.CachedQueryUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload>
+        }
+        deleteMany: {
+          args: Prisma.CachedQueryDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.CachedQueryUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.CachedQueryUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$CachedQueryPayload>[]
+        }
+        aggregate: {
+          args: Prisma.CachedQueryAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateCachedQuery>
+        }
+        groupBy: {
+          args: Prisma.CachedQueryGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.CachedQueryGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.CachedQueryCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.CachedQueryCountAggregateOutputType> | number
+        }
+      }
+    }
     Message: {
       payload: Prisma.$MessagePayload<ExtArgs>
       fields: Prisma.MessageFieldRefs
@@ -684,10 +743,24 @@ export const ConversationScalarFieldEnum = {
   id: 'id',
   title: 'title',
   slug: 'slug',
-  userId: 'userId'
+  userId: 'userId',
+  createdAt: 'createdAt'
 } as const
 
 export type ConversationScalarFieldEnum = (typeof ConversationScalarFieldEnum)[keyof typeof ConversationScalarFieldEnum]
+
+
+export const CachedQueryScalarFieldEnum = {
+  id: 'id',
+  queryText: 'queryText',
+  model: 'model',
+  answer: 'answer',
+  sources: 'sources',
+  images: 'images',
+  createdAt: 'createdAt'
+} as const
+
+export type CachedQueryScalarFieldEnum = (typeof CachedQueryScalarFieldEnum)[keyof typeof CachedQueryScalarFieldEnum]
 
 
 export const MessageScalarFieldEnum = {
@@ -709,6 +782,13 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
@@ -723,6 +803,15 @@ export const NullsOrder = {
 } as const
 
 export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 
 
 
@@ -770,6 +859,20 @@ export type EnumAuthProviderFieldRefInput<$PrismaModel> = FieldRefInputType<$Pri
  * Reference to a field of type 'AuthProvider[]'
  */
 export type ListEnumAuthProviderFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AuthProvider[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Json'
+ */
+export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+/**
+ * Reference to a field of type 'QueryMode'
+ */
+export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
     
 
 
@@ -926,6 +1029,7 @@ export type PrismaClientOptions = ({
 export type GlobalOmitConfig = {
   user?: Prisma.UserOmit
   conversation?: Prisma.ConversationOmit
+  cachedQuery?: Prisma.CachedQueryOmit
   message?: Prisma.MessageOmit
 }
 

@@ -53,6 +53,7 @@ export const AnyNull = runtime.AnyNull
 export const ModelName = {
   User: 'User',
   Conversation: 'Conversation',
+  CachedQuery: 'CachedQuery',
   Message: 'Message'
 } as const
 
@@ -89,10 +90,24 @@ export const ConversationScalarFieldEnum = {
   id: 'id',
   title: 'title',
   slug: 'slug',
-  userId: 'userId'
+  userId: 'userId',
+  createdAt: 'createdAt'
 } as const
 
 export type ConversationScalarFieldEnum = (typeof ConversationScalarFieldEnum)[keyof typeof ConversationScalarFieldEnum]
+
+
+export const CachedQueryScalarFieldEnum = {
+  id: 'id',
+  queryText: 'queryText',
+  model: 'model',
+  answer: 'answer',
+  sources: 'sources',
+  images: 'images',
+  createdAt: 'createdAt'
+} as const
+
+export type CachedQueryScalarFieldEnum = (typeof CachedQueryScalarFieldEnum)[keyof typeof CachedQueryScalarFieldEnum]
 
 
 export const MessageScalarFieldEnum = {
@@ -114,6 +129,13 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
@@ -128,4 +150,13 @@ export const NullsOrder = {
 } as const
 
 export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 

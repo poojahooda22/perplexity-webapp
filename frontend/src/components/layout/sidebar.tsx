@@ -136,7 +136,7 @@ export function Sidebar({
     <aside
       className={cn(
         "flex h-full shrink-0 flex-col border-r  border-sidebar-border bg-sidebar transition-[width] duration-200",
-        collapsed ? "w-[68px]" : "w-64",
+        collapsed ? "w-[58px]" : "w-52",
       )}
     >
       {/* Brand + collapse toggle */}

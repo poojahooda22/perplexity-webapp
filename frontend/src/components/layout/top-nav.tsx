@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { ComponentType } from "react";
 import { CalendarClock, FileText, Images, Link2 } from "lucide-react";
 
@@ -6,7 +5,8 @@ import type { ChatTab } from "@/components/chat-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/animated-tabs";
 
-const SECTION_TABS = ["Discover", "Finance", "Health", "Academic", "Patents"];
+export const SECTION_TABS = ["Discover", "Finance", "Health", "Academic"];
+export type Section = (typeof SECTION_TABS)[number];
 
 const CHAT_TABS: { id: ChatTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: "answer", label: "Answer", icon: FileText },
@@ -18,13 +18,15 @@ export function TopNav({
   mode = "home",
   activeTab = "answer",
   onTabChange,
+  section = "Discover",
+  onSectionChange,
 }: {
   mode?: "home" | "chat";
   activeTab?: ChatTab;
   onTabChange?: (tab: ChatTab) => void;
+  section?: Section;
+  onSectionChange?: (section: Section) => void;
 }) {
-  const [section, setSection] = useState<string>(SECTION_TABS[0] ?? "Discover");
-
   return (
     <header className="flex h-11.5 pt-1 shrink-0 items-center justify-between gap-4 border-b border-border/60 px-4">
       {/* Plan pill */}
@@ -54,7 +56,12 @@ export function TopNav({
           </TabsList>
         </Tabs>
       ) : (
-        <Tabs type="underline" value={section} onValueChange={setSection} className="hidden md:block">
+        <Tabs
+          type="underline"
+          value={section}
+          onValueChange={(v) => onSectionChange?.(v as Section)}
+          className="hidden md:block"
+        >
           <TabsList>
             {SECTION_TABS.map((tab) => (
               <TabsTrigger key={tab} value={tab}>

@@ -23,10 +23,13 @@
     "@tavily/core": "^0.7.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "ai": "^6.0.206",
     "axios": "^1.18.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "p-limit": "^7.3.0",
     "zod": "^4.4.3"
   }
 }

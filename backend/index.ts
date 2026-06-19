@@ -1,10 +1,11 @@
 import { tavily } from '@tavily/core';
 import express from 'express';
-import { streamText } from 'ai';
-import SYSTEM_PROMPT, { PROMPT_TEMPLATE } from './prompt';
+import { streamText, embed, generateText } from 'ai';
+import { buildSystemPrompt, buildUserPrompt, classifyQuery } from './prompt';
 import { middleware } from './middleware';
 import type { AuthenticatedRequest } from './middleware';
 import { prisma } from './db';
+import { financeRouter } from './finance/routes';
 
 const app = express();
 
@@ -12,14 +13,23 @@ const tavily_client = tavily({
     apiKey: process.env.TAVILY_API_KEY
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "25mb" })); // base64-encoded attachments can be large
 
 // CORS (explicit + preflight short-circuit). Express 5's router + cors@2 don't
 // reliably answer the OPTIONS preflight (it 404s), so we set the headers ourselves
 // and end preflight with 204. Access-Control-Expose-Headers lets the browser read
 // our custom x-conversation-id response header.
+// Optional allowlist: set ALLOWED_ORIGINS="https://app.com,https://www.app.com" in prod.
+// If unset we reflect the request origin (fine today — auth is header tokens, not cookies —
+// but set this before switching to cookie auth).
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",").map((o) => o.trim()).filter(Boolean);
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", req.headers.origin ?? "*");
+    const origin = req.headers.origin;
+    const allowed = ALLOWED_ORIGINS.length === 0
+        ? (origin ?? "*")                                   // dev: reflect
+        : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]);
+    res.header("Access-Control-Allow-Origin", allowed);
     res.header("Vary", "Origin");
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -30,6 +40,10 @@ app.use((req, res, next) => {
     }
     next();
 });
+
+// Finance tab — public market-data reads (cached + rate-limited) + cron warmer.
+// Mounted before auth so these stay public; each route caches upstream calls.
+app.use("/finance", financeRouter);
 
 // Vercel AI Gateway model ids (`<provider>/<model>`, dot in the model segment).
 // A bare string model routes through the gateway (uses AI_GATEWAY_API_KEY), giving
@@ -47,6 +61,22 @@ const ALLOWED_MODELS = new Set([
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 function resolveModel(model: unknown): string {
     return typeof model === "string" && ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
+}
+
+// Per-user rate limit — a stopgap "lock" on the paid endpoints until a real credits/billing
+// system lands (the `step 2 - TODO: credits` below). Without this, any signed-in user can
+// loop the endpoint and run up Tavily + embedding + premium-model (gpt-5.5-pro/opus) bills.
+// In-memory + per-instance, so it's best-effort on multi-instance deploys — make it Redis
+// for hard limits. Sliding window.
+const RATE_LIMIT = 20;          // max requests…
+const RATE_WINDOW_MS = 60_000;  // …per minute, per user
+const rateHits = new Map<string, number[]>();
+function rateLimited(userId: string): boolean {
+    const now = Date.now();
+    const hits = (rateHits.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+    hits.push(now);
+    rateHits.set(userId, hits);
+    return hits.length > RATE_LIMIT;
 }
 
 
@@ -90,14 +120,6 @@ async function webSearch(query: string) {
     return { results, sources, images };
 }
 
-// Stream the answer + a <SOURCES> block in the exact wire format the frontend parses.
-// (Kept identical for cache HITs and live answers so the client handles both the same.)
-function writeSources(res: express.Response, sources: unknown) {
-    res.write("\n<SOURCES>\n");
-    res.write(JSON.stringify(sources));
-    res.write("\n<SOURCES>\n");
-}
-
 // The sources + images wire blocks as ONE string — written to the live stream AND
 // persisted with the assistant message, so reloading a conversation from history keeps
 // its links + images (the frontend parses this exact format either way).
@@ -106,6 +128,27 @@ function sourcesImagesTail(sources: unknown, images: unknown): string {
         `\n<SOURCES>\n${JSON.stringify(sources)}\n<SOURCES>\n` +
         `\n<IMAGES>\n${JSON.stringify(images)}\n<IMAGES>\n`
     );
+}
+
+// Turn user-attached images/documents into AI-SDK multimodal content parts.
+// Images become `image` parts; everything else (PDFs, docs) becomes `file` parts.
+// The model must be vision/doc-capable (Claude, Gemini, GPT) — Sonar won't read them.
+type RawAttachment = { name?: string; mediaType?: string; base64?: string };
+type ContentPart =
+    | { type: "text"; text: string }
+    | { type: "image"; image: string; mediaType: string }
+    | { type: "file"; data: string; mediaType: string; filename?: string };
+
+function buildAttachmentParts(input: unknown): ContentPart[] {
+    if (!Array.isArray(input)) return [];
+    return (input as RawAttachment[])
+        .filter((a) => a && typeof a.base64 === "string" && a.base64.length > 0)
+        .map((a) => {
+            const mediaType = a.mediaType || "application/octet-stream";
+            return mediaType.startsWith("image/")
+                ? { type: "image" as const, image: a.base64!, mediaType }
+                : { type: "file" as const, data: a.base64!, mediaType, filename: a.name };
+        });
 }
 
 // Render the search results as a numbered, citeable context block for the LLM, so the
@@ -120,48 +163,195 @@ function formatSearchContext(
 
 
 /* ────────────────────────────────────────────────────────────────────────
- * Vector / semantic-cache layer  (Step 3 — NOT implemented yet)
+ * Conversation compaction (Phase 3.4)  — keep follow-ups fast on long threads.
  *
- * These three functions are the entire vector layer. They are wired into
- * /perplexity_ask below as no-ops today (embedQuery returns null -> every
- * request is a cache MISS -> the live Tavily+LLM path runs). To turn the
- * cache ON later, you only fill in these three bodies — the endpoints below
- * never change. See the RAG plan / migration we deferred.
+ * Sending the whole raw transcript every follow-up grows tokens without bound and
+ * eventually blows the context window. Instead we (1) strip the <SOURCES>/<IMAGES>
+ * blobs we appended for the UI, (2) keep the last few turns verbatim, and (3) fold
+ * everything older into a one-shot summary (cheap model). The summary is returned
+ * separately so the caller can put it in the SYSTEM prompt — keeping the `messages`
+ * array a clean user/assistant alternation.
+ * ──────────────────────────────────────────────────────────────────────── */
+const KEEP_RECENT_MESSAGES = 6;                      // ≈ last 3 turns sent verbatim
+const SUMMARY_MODEL = "anthropic/claude-haiku-4.5";  // fast + cheap for compaction
+
+// Remove the <SOURCES>…<SOURCES> / <IMAGES>…<IMAGES> wire blocks (closing tag is the
+// same token as the opening one). They're for the frontend, not useful as LLM context.
+function stripWireTail(content: string): string {
+    return content
+        .replace(/\n?<SOURCES>[\s\S]*?<SOURCES>\n?/g, "")
+        .replace(/\n?<IMAGES>[\s\S]*?<IMAGES>\n?/g, "")
+        .trim();
+}
+
+async function buildConversationHistory(
+    messages: Array<{ role: "user" | "Assistant"; content: string }>,
+): Promise<{ summary: string | null; history: Array<{ role: "user" | "assistant"; content: string }> }> {
+    // Normalize roles (DB enum 'Assistant' -> 'assistant') and strip UI blobs.
+    const turns = messages.map((m) => ({
+        role: m.role === "Assistant" ? ("assistant" as const) : ("user" as const),
+        content: stripWireTail(m.content),
+    }));
+
+    // Short thread: send verbatim, no summary, no extra cost.
+    if (turns.length <= KEEP_RECENT_MESSAGES) return { summary: null, history: turns };
+
+    // Long thread: keep the last N verbatim, summarize everything older.
+    const older = turns.slice(0, turns.length - KEEP_RECENT_MESSAGES);
+    let recent = turns.slice(turns.length - KEEP_RECENT_MESSAGES);
+    // Anthropic requires the first message to be a 'user' turn — drop any leading assistant.
+    while (recent[0]?.role === "assistant") recent = recent.slice(1);
+
+    const transcript = older
+        .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`)
+        .join("\n\n");
+    try {
+        const { text } = await generateText({
+            model: SUMMARY_MODEL,
+            system:
+                "You compress conversations. Summarize the exchange below, preserving key facts, " +
+                "named entities, the user's goals, and any decisions needed to answer future " +
+                "follow-ups. Be concise; bullet points are fine. Do not invent anything.",
+            prompt: transcript,
+        });
+        return { summary: text.trim(), history: recent };
+    } catch (e) {
+        // Best-effort: on failure fall back to recent turns only (still bounded) rather
+        // than failing the request or resending the whole transcript.
+        console.error("[compaction] summarize failed:", e instanceof Error ? e.message : String(e));
+        return { summary: null, history: recent };
+    }
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Vector / semantic-cache layer
+ *
+ * A GLOBAL cache (shared across users) of answered queries, keyed by the query's
+ * embedding. On each /perplexity_ask we embed the query, look for a close-enough,
+ * non-stale past row (cosine distance via pgvector's <=>) and, if found, replay it
+ * instead of paying for a fresh Tavily search + LLM generation.
+ *
+ * Tunables:
+ *  - DISTANCE_THRESHOLD: cosine distance (0 = identical, 2 = opposite) below which
+ *    two queries count as the SAME question. Lower = stricter. 0.15 keeps genuine
+ *    near-duplicates while keeping different queries apart — e.g. "learn React" vs
+ *    "learn React Native" sit ABOVE this and correctly MISS. Tune against real logs.
+ *  - CACHE_TTL_DAYS: how long a cached answer stays fresh; older rows are ignored.
+ *
+ * The cache is a pure optimization, so every function is FAIL-OPEN: any error makes
+ * it behave as a miss/no-op and the live path runs. If the table doesn't exist yet
+ * (migration not run), we disable the cache for the process to avoid log spam —
+ * restart after migrating to re-enable.
  * ──────────────────────────────────────────────────────────────────────── */
 
-// Step A — turn the user query into an embedding vector.
-async function embedQuery(_query: string): Promise<number[] | null> {
-    // TODO(vector): import { embed } from 'ai';
-    //   const { embedding } = await embed({ model: 'openai/text-embedding-3-small', value: _query });
-    //   return embedding;            // 1536-dim vector, routed via the AI Gateway like gpt-4o
-    return null;                      // null => "no embedding yet" => always a cache miss
+const DISTANCE_THRESHOLD = 0.15;
+const CACHE_TTL_DAYS = 7;
+// After a real cache-INFRA error (table missing) we pause the cache for this long,
+// then PROBE again — instead of the old "disable forever" latch. Lets the cache
+// self-heal (e.g. table created after the server started) with no restart.
+const CACHE_COOLDOWN_MS = 60_000;
+
+// Time-sensitive queries must NEVER be served from cache (prices, news, "today"…),
+// so we skip the cache entirely for them — no read, no write. Critical for finance.
+const TIME_SENSITIVE =
+    /\b(today|now|currently|current|latest|live|breaking|news|price|prices|stock|stocks|score|scores|weather|tonight|right now|this (week|month|year)|yesterday|tomorrow|202\d)\b/i;
+function isTimeSensitive(query: string): boolean {
+    return TIME_SENSITIVE.test(query);
 }
 
-// Step B — find a semantically-similar PAST query already answered & cached.
+// Cache availability — a short cooldown window, NOT a permanent kill-switch.
+let cacheDownUntil = 0;
+function cacheDown(): boolean {
+    return Date.now() < cacheDownUntil;
+}
+function noteCacheError(where: string, e: unknown): void {
+    const code = (e as { code?: string })?.code;
+    const msg = e instanceof Error ? e.message : String(e);
+    // ONLY a genuine Postgres "undefined_table" (42P01) pauses the cache. We do NOT
+    // free-text match "does not exist" — the AI gateway returns "model does not exist…"
+    // for credential issues, which must never be mistaken for a DB problem.
+    if (code === "42P01") {
+        cacheDownUntil = Date.now() + CACHE_COOLDOWN_MS;
+        console.warn(`[semantic-cache] table missing (${where}) — pausing ${CACHE_COOLDOWN_MS / 1000}s then retrying.`);
+        return;
+    }
+    console.error(`[semantic-cache] ${where} failed:`, msg);
+}
+
+// Step A — turn the user query into an embedding vector (the cache key).
+async function embedQuery(query: string): Promise<number[] | null> {
+    if (cacheDown()) return null;
+    try {
+        // Bare string id → routed through the Vercel AI Gateway, like the chat models.
+        const { embedding } = await embed({ model: "openai/text-embedding-3-small", value: query });
+        return embedding;
+    } catch (e) {
+        // An embedding failure is just a cache MISS — it must NOT pause the cache.
+        console.error("[semantic-cache] embedQuery failed:", e instanceof Error ? e.message : String(e));
+        return null;
+    }
+}
+
+// Step B — find a semantically-similar PAST query answered & cached FOR THE SAME MODEL.
 async function findCachedAnswer(
-    embedding: number[] | null
-): Promise<{ answer: string; sources: unknown } | null> {
-    if (!embedding) return null;
-    // TODO(vector): cosine nearest-neighbour over pgvector, e.g.
-    //   const vec = `[${embedding.join(',')}]`;
-    //   const rows = await prisma.$queryRaw`
-    //     SELECT "answer", "sources", ("embedding" <=> ${vec}::vector) AS distance
-    //     FROM "cached_query" ORDER BY "embedding" <=> ${vec}::vector LIMIT 1`;
-    //   return hit within distance threshold AND not stale (TTL) ? rows[0] : null;
-    return null;
+    embedding: number[] | null,
+    model: string,
+): Promise<{ answer: string; sources: unknown; images: unknown } | null> {
+    if (!embedding || cacheDown()) return null;
+    try {
+        const vec = `[${embedding.join(",")}]`;
+        const cutoff = new Date(Date.now() - CACHE_TTL_DAYS * 24 * 60 * 60 * 1000);
+        // Keyed on (embedding, model): a premium-model request must never be served a
+        // budget-model's cached answer. TTL filter drops stale rows.
+        const rows = await prisma.$queryRaw<
+            Array<{ answer: string; sources: unknown; images: unknown; distance: number }>
+        >`
+            SELECT answer, sources, images, (embedding <=> ${vec}::vector) AS distance
+            FROM cached_query
+            WHERE model = ${model} AND created_at > ${cutoff}
+            ORDER BY embedding <=> ${vec}::vector
+            LIMIT 1
+        `;
+        const hit = rows[0];
+        if (hit && hit.distance <= DISTANCE_THRESHOLD) {
+            return { answer: hit.answer, sources: hit.sources, images: hit.images };
+        }
+        return null;
+    } catch (e) {
+        noteCacheError("findCachedAnswer", e);
+        return null;
+    }
 }
 
-// Step C — after a fresh live answer, store it so future similar queries hit the cache.
-async function cacheAnswer(_p: {
+// Step C — after a fresh, CLEANLY-FINISHED live answer, store it for future hits.
+async function cacheAnswer(p: {
     query: string;
     embedding: number[] | null;
+    model: string;
     answer: string;
     sources: unknown;
-    userId?: string;
+    images: unknown;
 }): Promise<void> {
-    if (!_p.embedding) return;
-    // TODO(vector): $executeRaw INSERT INTO "cached_query" (queryText, embedding, answer, sources, userId, createdAt) ...
-    return;
+    if (!p.embedding || cacheDown()) return;
+    try {
+        const vec = `[${p.embedding.join(",")}]`;
+        await prisma.$executeRaw`
+            INSERT INTO cached_query (id, query_text, model, embedding, answer, sources, images, created_at)
+            VALUES (
+                ${crypto.randomUUID()},
+                ${p.query},
+                ${p.model},
+                ${vec}::vector,
+                ${p.answer},
+                ${JSON.stringify(p.sources)}::jsonb,
+                ${JSON.stringify(p.images)}::jsonb,
+                NOW()
+            )
+        `;
+    } catch (e) {
+        noteCacheError("cacheAnswer", e);
+    }
 }
 
 
@@ -171,12 +361,10 @@ async function cacheAnswer(_p: {
 app.get("/conversations", middleware, async (req: AuthenticatedRequest, res) => {
     if (!req.userId) return res.status(401).json({ error: "unauthorised" });
 
-    // NOTE: Conversation has no createdAt column yet, so we can't order chronologically.
-    // Add `createdAt DateTime @default(now())` to the model in the next migration, then
-    // switch to `orderBy: { createdAt: "desc" }`.
     const conversations = await prisma.conversation.findMany({
         where: { userId: req.userId },
         select: { id: true, title: true, slug: true },
+        orderBy: { createdAt: "desc" }, // newest conversations at the top of the sidebar
     });
 
     res.json({ conversations });
@@ -266,7 +454,10 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
         return res.status(400).json({ error: "Missing or invalid 'query' in request body" });
     }
 
-    // step 2 - TODO: make sure the user has access/credits to hit the endpoint (payment gateway)
+    // step 2 - access control. Rate limit is a stopgap until a real credits/payment gateway.
+    if (rateLimited(req.userId)) {
+        return res.status(429).json({ error: "Too many requests — please slow down." });
+    }
 
     try {
         // Resolve the conversation: continue an existing one (ownership-checked) or start a new one.
@@ -293,42 +484,59 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             data: { content: query, role: "user", conversationId: conversation.id },
         });
 
-        // step 3 - SEMANTIC CACHE: try to answer from a similar past query before paying
-        //          for a Tavily search + an LLM generation. (No-op until the vector layer is filled in.)
-        const embedding = await embedQuery(query);
-        const cached = await findCachedAnswer(embedding);
+        // step 3 - SEMANTIC CACHE. Resolve the model up front (the cache is keyed on it).
+        //          Skip the cache entirely for time-sensitive queries (prices/news/"today")
+        //          and for requests with attachments (the answer depends on the upload).
+        const model = resolveModel(req.body.model);
+        const parts = buildAttachmentParts(req.body.attachments);
+        const cacheable = !isTimeSensitive(query) && parts.length === 0;
+        const embedding = cacheable ? await embedQuery(query) : null;
+        const cached = cacheable ? await findCachedAnswer(embedding, model) : null;
 
         // Tell the client which conversation this is (read via the exposed header).
         res.setHeader("x-conversation-id", conversation.id);
         res.header("Cache-Control", "no-cache");
         res.header("Content-Type", "text/event-stream");
+        // Defeat proxy/load-balancer buffering so tokens actually stream (e.g. on Vercel).
+        res.setHeader("X-Accel-Buffering", "no");
+        res.flushHeaders?.();
 
         if (cached) {
-            // Cache HIT — replay the stored answer, skip Tavily + the LLM entirely.
+            // Cache HIT — replay the stored answer (+ its sources/images) in the SAME wire
+            // format as a live answer, so the client handles both identically. Skips Tavily
+            // AND the LLM entirely → sub-second response. Persist BEFORE res.end(): on Vercel
+            // the instance can freeze the moment the response closes, so post-end writes may
+            // never run.
+            const tail = sourcesImagesTail(cached.sources, cached.images);
             res.write(cached.answer);
-            writeSources(res, cached.sources);
-            res.end();
-            await persistUserTurn; // ensure the user turn lands before the assistant turn
+            res.write(tail);
+            await persistUserTurn; // user turn lands before the assistant turn (id ordering)
             await prisma.message.create({
-                data: { content: cached.answer, role: "Assistant", conversationId: conversation.id },
+                data: { content: cached.answer + tail, role: "Assistant", conversationId: conversation.id },
             });
+            res.end();
             return;
         }
 
         // step 4 - MISS PATH: live web search to gather sources (Tavily)
         const { results, sources, images } = await webSearch(query);
 
-        // step 5 - context engineering: stuff the web results + query into the prompt template
-        const prompt = PROMPT_TEMPLATE
-            .replace("{{WEB_SEARCH_RESULTS}}", formatSearchContext(results))
-            .replace("{{USER_QUERY}}", query);
+        // step 5 - context engineering: classify the query, then assemble the prompt from
+        // composable layers — persona + the matching task playbook (system) and the dated
+        // web-results context (user). This is the "intelligence layer".
+        const queryType = classifyQuery(query);
+        const today = new Date().toISOString().slice(0, 10);
+        const prompt = buildUserPrompt({ query, searchContext: formatSearchContext(results), date: today });
 
-        // step 6 - hit the LLM and stream the answer back
+        // step 6 - hit the LLM and stream the answer back. With attachments, send a
+        // multimodal user message (text + image/file parts) instead of a plain prompt.
+        const userContent: string | ContentPart[] = parts.length
+            ? [{ type: "text", text: prompt }, ...parts]
+            : prompt;
         const result = streamText({
-            // bare string id → routed through the Vercel AI Gateway (uses AI_GATEWAY_API_KEY)
-            model: resolveModel(req.body.model),
-            prompt,
-            system: SYSTEM_PROMPT,
+            model,   // resolved above; also the cache key
+            system: buildSystemPrompt(queryType),
+            messages: [{ role: "user", content: userContent }],
             // streamText swallows mid-stream errors by default — surface them
             onError: ({ error }) => console.error("streamText error:", error),
         });
@@ -338,24 +546,30 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             fullAnswer += textPart;   // buffer so we can persist + cache it
             res.write(textPart);
         }
+        // Did the model finish cleanly or break mid-stream? Only CLEAN answers get cached.
+        let finishReason: string;
+        try { finishReason = await result.finishReason; } catch { finishReason = "error"; }
 
         // step 7 - stream the references the answer cited + any images from the search
         const tail = sourcesImagesTail(sources, images);
         res.write(tail);
 
-        // step 8 - close the stream
-        res.end();
-
-        // step 9 - persist both turns (user turn was started earlier) + populate the cache,
-        //          all after the client already has its answer. Await the user turn first so
-        //          its autoincrement id stays below the assistant turn's (correct ordering).
-        await persistUserTurn;
+        // step 8 - persist BEFORE closing. On Vercel the instance can freeze the instant the
+        //          response ends, so post-end DB writes (history + cache) may never run.
+        await persistUserTurn; // user turn id stays below the assistant turn's
         if (fullAnswer.trim()) {
             await prisma.message.create({
                 data: { content: fullAnswer + tail, role: "Assistant", conversationId: conversation.id },
             });
-            await cacheAnswer({ query, embedding, answer: fullAnswer, sources, userId: req.userId });
+            // Cache ONLY a complete answer for a cacheable query — never replay a
+            // truncated/errored answer (or a time-sensitive one) for the whole TTL.
+            if (cacheable && finishReason === "stop") {
+                await cacheAnswer({ query, embedding, model, answer: fullAnswer, sources, images });
+            }
         }
+
+        // step 9 - close the stream
+        res.end();
     } catch (err) {
         console.error("Request failed:", err);
         if (!res.headersSent) {
@@ -388,6 +602,9 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
     if (!query || typeof query !== "string") {
         return res.status(400).json({ error: "Missing or invalid 'query'" });
     }
+    if (rateLimited(req.userId)) {
+        return res.status(429).json({ error: "Too many requests — please slow down." });
+    }
 
     try {
         // step 1 - get the existing chat from the DB (ownership-checked), oldest message first
@@ -397,34 +614,45 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
         });
         if (!conversation) return res.status(404).json({ error: "Conversation not found" });
 
-        // Map stored turns into LLM chat messages (DB enum 'Assistant' -> 'assistant').
-        const history = conversation.messages.map((m) => ({
-            role: m.role === "Assistant" ? ("assistant" as const) : ("user" as const),
-            content: m.content,
-        }));
-
-        // Persist the new user turn WITHOUT blocking the search. `history` above is built from
-        // the already-stored turns, so this write isn't needed until we save the assistant
-        // reply — awaited later to preserve message order.
+        // Persist the new user turn WITHOUT blocking. The history below is built from the
+        // already-stored turns, so this isn't needed until we save the assistant reply —
+        // awaited later to preserve message order.
         const persistUserTurn = prisma.message.create({
             data: { content: query, role: "user", conversationId: conversation.id },
         });
 
-        // Follow-ups still benefit from fresh sources, so web search the new query too.
-        const { results, sources, images } = await webSearch(query);
-        const augmentedQuery = PROMPT_TEMPLATE
-            .replace("{{WEB_SEARCH_RESULTS}}", formatSearchContext(results))
-            .replace("{{USER_QUERY}}", query);
+        // step 2 - build bounded context (compaction) AND fetch fresh sources, concurrently.
+        // Compaction strips UI blobs, keeps the last few turns verbatim, and summarizes older
+        // ones — so token cost stays flat no matter how long the thread gets.
+        const [{ summary, history }, { results, sources, images }] = await Promise.all([
+            buildConversationHistory(conversation.messages),
+            webSearch(query),
+        ]);
 
-        // step 2 - forward the full history + the augmented new query to the LLM
+        const today = new Date().toISOString().slice(0, 10);
+        const augmentedQuery = buildUserPrompt({ query, searchContext: formatSearchContext(results), date: today });
+
+        // step 3 - forward the (compacted) history + the augmented new query to the LLM
         res.setHeader("x-conversation-id", conversation.id);
         res.header("Cache-Control", "no-cache");
         res.header("Content-Type", "text/event-stream");
+        res.setHeader("X-Accel-Buffering", "no"); // defeat proxy buffering so tokens stream
+        res.flushHeaders?.();
 
+        const followUpParts = buildAttachmentParts(req.body.attachments);
+        const followUpContent: string | ContentPart[] = followUpParts.length
+            ? [{ type: "text", text: augmentedQuery }, ...followUpParts]
+            : augmentedQuery;
+        // Put the summary of older turns in the SYSTEM prompt (keeps `messages` a clean
+        // user/assistant alternation).
+        const baseSystem = buildSystemPrompt(classifyQuery(query));
+        const system = summary
+            ? `${baseSystem}\n\n## Earlier conversation (summary of older turns)\n${summary}`
+            : baseSystem;
         const result = streamText({
             model: resolveModel(req.body.model),
-            system: SYSTEM_PROMPT,
-            messages: [...history, { role: "user" as const, content: augmentedQuery }],
+            system,
+            messages: [...history, { role: "user" as const, content: followUpContent }],
             onError: ({ error }) => console.error("streamText error:", error),
         });
 
@@ -436,17 +664,16 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
         }
         const tail = sourcesImagesTail(sources, images);
         res.write(tail);
-        res.end();
 
-        // persist both turns (user turn was started earlier) after the client has its answer;
-        // await the user turn first so its id stays below the assistant turn's (correct order)
+        // persist BEFORE closing (on Vercel the instance can freeze the instant the response
+        // ends). Await the user turn first so its id stays below the assistant turn's.
         await persistUserTurn;
-        // persist the FULL payload (answer + sources + images); skip empties from a failed generation
         if (fullAnswer.trim()) {
             await prisma.message.create({
                 data: { content: fullAnswer + tail, role: "Assistant", conversationId: conversation.id },
             });
         }
+        res.end();
     } catch (err) {
         console.error("Follow-up failed:", err);
         if (!res.headersSent) {

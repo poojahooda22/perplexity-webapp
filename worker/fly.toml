@@ -1,0 +1,29 @@
+# Fly.io config for the always-on price worker.
+# This is a WORKER with NO inbound HTTP service — it only makes outbound connections
+# (Finnhub WS in, Supabase broadcast out). The critical thing is that the machine must
+# STAY RUNNING. `fly launch` tends to add an [http_service] with auto_stop_machines='stop'
+# and min_machines_running=0 — for a worker like this you do NOT want that.
+#
+# After `fly launch` (accept Dockerfile), ensure the machine is always-on:
+#   fly scale count 1
+#   fly machine update <id> --autostart=false --autostop=false   (or set below)
+# and set secrets (NOT in this file):
+#   fly secrets set FINNHUB_API_KEY=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_URL=https://<ref>.supabase.co
+
+app = "perplexity-finance-worker"
+primary_region = "iad"
+
+[build]
+
+[env]
+  PRICE_CHANNEL = "prices:top"
+  FLUSH_MS = "1000"
+  SYMBOLS = "GOOGL,NVDA,TSLA,META,AAPL,AMZN,BINANCE:BTCUSDT,BINANCE:ETHUSDT,BINANCE:SOLUSDT,BINANCE:XRPUSDT,BINANCE:BNBUSDT"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  # always-on: one machine, never autostop (no inbound traffic to wake it otherwise)
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1

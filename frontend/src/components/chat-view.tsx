@@ -3,7 +3,8 @@ import { ArrowUp, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { parseStream, type ImageResult, type Source } from "@/lib/api";
+import { parseStream, type Attachment, type ImageResult, type Source } from "@/lib/api";
+import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/attachments";
 import { cn } from "@/lib/utils";
 
 export type ChatTab = "answer" | "links" | "images";
@@ -80,16 +81,18 @@ export function ChatView({
 }: {
   turns: Turn[];
   activeTab: ChatTab;
-  onFollowUp: (query: string) => void;
+  onFollowUp: (query: string, attachments?: Attachment[]) => void;
   busy: boolean;
 }) {
   const [value, setValue] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   function submit() {
     const trimmed = value.trim();
     if (!trimmed || busy) return;
-    onFollowUp(trimmed);
+    onFollowUp(trimmed, attachments);
     setValue("");
+    setAttachments([]);
   }
 
   const parsedTurns = turns.map((turn) => ({ turn, parsed: parseStream(turn.full) }));
@@ -118,34 +121,46 @@ export function ChatView({
       <div className=" px-4 py-3">
         <form
           onSubmit={(e) => { e.preventDefault(); submit(); }}
-          className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border bg-card px-4 py-2 focus-within:border-ring/60"
+          className="mx-auto w-full max-w-3xl rounded-2xl border border-border bg-card px-3 py-2 focus-within:border-ring/60"
         >
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            rows={1}
-            placeholder="Ask a follow-up…"
-            className="block field-sizing-content max-h-[30vh] min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
+          <AttachmentPreviews
+            attachments={attachments}
+            onRemove={(i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+            className="px-1 pb-2 pt-1"
           />
-          <button
-            type="submit"
-            aria-label="Send follow-up"
-            disabled={!value.trim() || busy}
-            className={cn(
-              "inline-flex size-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              value.trim() && !busy
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-secondary text-muted-foreground",
-            )}
-          >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
-          </button>
+          <div className="flex items-end gap-2">
+            <AttachButton
+              onAdd={(added) => setAttachments((prev) => [...prev, ...added].slice(0, MAX_ATTACHMENTS))}
+              disabled={attachments.length >= MAX_ATTACHMENTS}
+              className="mb-0.5"
+            />
+            <textarea
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              rows={1}
+              placeholder="Ask a follow-up…"
+              className="block field-sizing-content max-h-[30vh] min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+            <button
+              type="submit"
+              aria-label="Send follow-up"
+              disabled={!value.trim() || busy}
+              className={cn(
+                "inline-flex size-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                value.trim() && !busy
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-secondary text-muted-foreground",
+              )}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+            </button>
+          </div>
         </form>
       </div>
     </div>

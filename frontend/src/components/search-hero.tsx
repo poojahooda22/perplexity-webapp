@@ -1,19 +1,11 @@
 import { useRef, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
-import {
-  ArrowUp,
-  Briefcase,
-  ChevronDown,
-  FileText,
-  Globe,
-  Map as MapIcon,
-  Monitor,
-  Paperclip,
-  Presentation,
-} from "lucide-react";
+import type { ComponentType } from "react";
+import { ArrowUp, Briefcase, FileText, Map as MapIcon, Presentation } from "lucide-react";
 
 import { PerplexityWordmark } from "@/components/brand";
 import { ModelMenu } from "@/components/model-menu";
+import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/attachments";
+import type { Attachment } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface Suggestion {
@@ -34,18 +26,20 @@ export function SearchHero({
   model,
   onModelChange,
 }: {
-  onSubmit: (query: string) => void;
+  onSubmit: (query: string, attachments: Attachment[]) => void;
   model: string;
   onModelChange: (id: string) => void;
 }) {
   const [value, setValue] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function submit() {
     const trimmed = value.trim();
     if (!trimmed) return;
-    onSubmit(trimmed);
+    onSubmit(trimmed, attachments);
     setValue("");
+    setAttachments([]);
   }
 
   return (
@@ -71,20 +65,18 @@ export function SearchHero({
           className="block field-sizing-content max-h-[30vh] min-h-[28px] w-full resize-none overflow-y-auto bg-transparent px-5 pt-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
 
+        <AttachmentPreviews
+          attachments={attachments}
+          onRemove={(i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+          className="px-5 pt-3"
+        />
+
         <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-2">
           <div className="flex items-center gap-1.5">
-            <IconButton label="Attach">
-              <Paperclip className="size-4" />
-            </IconButton>
-            <Pill>
-              <Globe className="size-4" />
-              Search
-              <ChevronDown className="size-3.5 opacity-60" />
-            </Pill>
-            <Pill>
-              <Monitor className="size-4" />
-              Computer
-            </Pill>
+            <AttachButton
+              onAdd={(added) => setAttachments((prev) => [...prev, ...added].slice(0, MAX_ATTACHMENTS))}
+              disabled={attachments.length >= MAX_ATTACHMENTS}
+            />
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -124,25 +116,5 @@ export function SearchHero({
         ))}
       </div>
     </div>
-  );
-}
-
-function Pill({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-      {children}
-    </span>
-  );
-}
-
-function IconButton({ children, label }: { children: ReactNode; label: string }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      {children}
-    </button>
   );
 }

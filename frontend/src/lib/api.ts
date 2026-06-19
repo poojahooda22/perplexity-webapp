@@ -13,6 +13,13 @@ export interface Source {
   content?: string;
 }
 
+/** A user-attached image or document, sent to the model as base64. */
+export interface Attachment {
+  name: string;
+  mediaType: string; // e.g. "image/png", "application/pdf"
+  base64: string; // without the "data:...;base64," prefix
+}
+
 export interface ImageResult {
   url: string;
   description?: string;
@@ -89,6 +96,8 @@ interface StreamOpts {
   onChunk: (full: string) => void;
   /** AI Gateway model id, e.g. "openai/gpt-4o". Server allowlists + defaults it. */
   model?: string;
+  /** Attached images/documents the model should analyze. */
+  attachments?: Attachment[];
 }
 
 async function streamPost(
@@ -131,7 +140,7 @@ export function streamAsk(
 ): Promise<AskResult> {
   return streamPost(
     "/perplexity_ask",
-    { query, conversationId: opts.conversationId, model: opts.model },
+    { query, conversationId: opts.conversationId, model: opts.model, attachments: opts.attachments },
     opts,
   );
 }
@@ -142,7 +151,11 @@ export function streamFollowUp(
   query: string,
   opts: StreamOpts,
 ): Promise<AskResult> {
-  return streamPost("/perplexity_ask/follow_up", { conversationId, query, model: opts.model }, opts);
+  return streamPost(
+    "/perplexity_ask/follow_up",
+    { conversationId, query, model: opts.model, attachments: opts.attachments },
+    opts,
+  );
 }
 
 const SOURCES_RE = /\n<SOURCES>\n([\s\S]*?)\n<SOURCES>\n/;

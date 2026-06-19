@@ -57,7 +57,11 @@ export async function middleware(req: AuthenticatedRequest, res: Response, next:
             });
             provisionedUsers.add(user.id);
         } catch (e) {
-            console.log(e);
+            // Fail loudly: if we can't ensure the user row exists, downstream writes
+            // (conversation/message FKs) would fail confusingly two steps later. Don't
+            // cache the token or continue — surface it here.
+            console.error("[auth] user provisioning failed:", e);
+            return res.status(500).json({ error: "Could not provision user" });
         }
     }
 

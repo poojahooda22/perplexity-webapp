@@ -11,11 +11,13 @@ import {
   renameConversation,
   streamAsk,
   streamFollowUp,
+  type Attachment,
   type ConversationSummary,
 } from "@/lib/api";
 import { AppShell } from "@/components/layout/app-shell";
 import { Sidebar } from "@/components/layout/sidebar";
-import { TopNav } from "@/components/layout/top-nav";
+import { TopNav, type Section } from "@/components/layout/top-nav";
+import { FinanceView } from "@/components/finance/finance-view";
 import { SearchHero } from "@/components/search-hero";
 import { ChatView, type ChatTab, type Turn } from "@/components/chat-view";
 import { DEFAULT_MODEL } from "@/components/model-menu";
@@ -34,6 +36,7 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const [activeTab, setActiveTab] = useState<ChatTab>("answer");
+  const [section, setSection] = useState<Section>("Discover");
 
   // Async stream callbacks read the live conversation id / model without re-binding.
   const convIdRef = useRef<string | null>(null);
@@ -93,7 +96,7 @@ export default function Dashboard() {
 
   // ── Ask / follow-up ───────────────────────────────────────────────────────
   const runTurn = useCallback(
-    async (query: string, fresh: boolean) => {
+    async (query: string, fresh: boolean, attachments?: Attachment[]) => {
       const id = crypto.randomUUID();
       const turn: Turn = { id, question: query, full: "", status: "streaming" };
       setTurns((prev) => (fresh ? [turn] : [...prev, turn]));
@@ -106,8 +109,8 @@ export default function Dashboard() {
         const existingId = convIdRef.current;
         const result =
           !fresh && existingId
-            ? await streamFollowUp(existingId, query, { onChunk, model: modelRef.current })
-            : await streamAsk(query, { onChunk, model: modelRef.current });
+            ? await streamFollowUp(existingId, query, { onChunk, model: modelRef.current, attachments })
+            : await streamAsk(query, { onChunk, model: modelRef.current, attachments });
 
         if (result.conversationId) {
           convIdRef.current = result.conversationId;
@@ -128,16 +131,19 @@ export default function Dashboard() {
   );
 
   const handleAsk = useCallback(
-    (query: string) => {
+    (query: string, attachments?: Attachment[]) => {
       setConversationId(null);
       convIdRef.current = null;
       setActiveTab("answer");
-      void runTurn(query, true);
+      void runTurn(query, true, attachments);
     },
     [runTurn],
   );
 
-  const handleFollowUp = useCallback((query: string) => void runTurn(query, false), [runTurn]);
+  const handleFollowUp = useCallback(
+    (query: string, attachments?: Attachment[]) => void runTurn(query, false, attachments),
+    [runTurn],
+  );
 
   const handleNewChat = useCallback(() => {
     setTurns([]);
@@ -244,11 +250,15 @@ export default function Dashboard() {
           mode={inChat ? "chat" : "home"}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          section={section}
+          onSectionChange={setSection}
         />
       }
     >
       {inChat ? (
         <ChatView turns={turns} activeTab={activeTab} onFollowUp={handleFollowUp} busy={busy} />
+      ) : section === "Finance" ? (
+        <FinanceView onAsk={handleAsk} />
       ) : (
         <SearchHero onSubmit={handleAsk} model={model} onModelChange={setModel} />
       )}

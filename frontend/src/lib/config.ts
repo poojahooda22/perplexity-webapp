@@ -1,7 +1,6 @@
-// In production set BUN_PUBLIC_BACKEND_URL (in Vercel) to the deployed backend URL,
-// e.g. https://perplexity-backend.vercel.app. It's inlined at build time (build.ts
-// env: "BUN_PUBLIC_*"). Falls back to the local dev server.
+// Backend URL. Set BUN_PUBLIC_BACKEND_URL in Vercel (prod) and in frontend/.env.local
+// (dev) — Bun inlines `process.env.BUN_PUBLIC_*` at build/transpile time, so the literal
+// value (not a `process` reference) ends up in the browser bundle. Falls back to the
+// local dev server if unset.
 export const BACKEND_URL =
-  process.env.BUN_PUBLIC_BACKEND_URL ||
-  (import.meta.env && import.meta.env.BUN_PUBLIC_BACKEND_URL) ||
-  "http://localhost:3001";
+  process.env.BUN_PUBLIC_BACKEND_URL || "http://localhost:3001";

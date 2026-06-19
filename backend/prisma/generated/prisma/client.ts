@@ -52,6 +52,11 @@ export type User = Prisma.UserModel
  */
 export type Conversation = Prisma.ConversationModel
 /**
+ * Model CachedQuery
+ * 
+ */
+export type CachedQuery = Prisma.CachedQueryModel
+/**
  * Model Message
  * 
  */
