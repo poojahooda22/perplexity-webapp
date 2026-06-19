@@ -11,7 +11,7 @@
 // commercial plan) from Finnhub — commercialOk stays false until then. Demo/internal use is fine.
 // ─────────────────────────────────────────────────────────────────────────
 
-import type { Provenance } from "./sources";
+import type { Provenance } from "./sources.js";
 
 const FINNHUB_NEWS = "https://finnhub.io/api/v1/news";
 

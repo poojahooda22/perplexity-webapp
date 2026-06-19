@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createSupabaseClient } from "./client";
-import { prisma } from "./db";
+import { createSupabaseClient } from "./client.js";
+import { prisma } from "./db.js";
 
 // Create the Supabase client LAZILY (on the first authenticated request), NOT at module load.
 // index.ts imports this file at boot, and createClient() throws if the Supabase env vars are

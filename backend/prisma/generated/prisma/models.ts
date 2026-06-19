@@ -8,8 +8,8 @@
  *
  * 🟢 You can import this file directly.
  */
-export type * from './models/User.ts'
-export type * from './models/Conversation.ts'
-export type * from './models/CachedQuery.ts'
-export type * from './models/Message.ts'
-export type * from './commonInputTypes.ts'
+export type * from './models/User.js'
+export type * from './models/Conversation.js'
+export type * from './models/CachedQuery.js'
+export type * from './models/Message.js'
+export type * from './commonInputTypes.js'

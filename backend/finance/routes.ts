@@ -4,12 +4,12 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { Router, type RequestHandler } from "express";
-import { getOrRefresh } from "../lib/cache";
-import { financeRateLimit } from "../lib/ratelimit";
-import { fetchCrypto, fetchPredictions, fetchIndices, fetchStocks } from "./sources";
-import { fetchMarketSummary } from "./summary";
-import { fetchAllResearch } from "./research";
-import { fetchDiscover } from "./news";
+import { getOrRefresh } from "../lib/cache.js";
+import { financeRateLimit } from "../lib/ratelimit.js";
+import { fetchCrypto, fetchPredictions, fetchIndices, fetchStocks } from "./sources.js";
+import { fetchMarketSummary } from "./summary.js";
+import { fetchAllResearch } from "./research.js";
+import { fetchDiscover } from "./news.js";
 
 export const financeRouter = Router();
 

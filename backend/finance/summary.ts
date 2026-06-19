@@ -9,7 +9,7 @@ import { tavily } from "@tavily/core";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-import type { Provenance } from "./sources";
+import type { Provenance } from "./sources.js";
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 

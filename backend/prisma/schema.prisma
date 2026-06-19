@@ -7,6 +7,10 @@ generator client {
   // "nodejs" so the generated client runs on Vercel's Node serverless runtime.
   // (Still runs fine under Bun locally — Bun is Node-compatible.)
   runtime = "nodejs"
+  // Emit ".js" import extensions in the generated client (default is ".ts"). On Vercel the
+  // .ts files compile to .js and run under Node's strict ESM resolver, which needs the real
+  // runtime extension — ".ts" specifiers would 404 at boot. Bun still resolves ".js"→".ts" locally.
+  importFileExtension = "js"
 }
 
 datasource db {
