@@ -2,8 +2,11 @@ import { tavily } from '@tavily/core';
 import express from 'express';
 import { streamText, embed, generateText } from 'ai';
 import { buildSystemPrompt, buildUserPrompt, classifyQuery } from './prompt';
-import { middleware } from './middleware';
-import type { AuthenticatedRequest } from './middleware';
+// NOTE: this file is named auth.ts, NOT middleware.ts, on purpose. Vercel treats a
+// root-level `middleware.ts` as Edge Middleware (V8 isolates, no Node modules) and the
+// build fails because this auth code imports Prisma/pg. Keep it off that magic filename.
+import { middleware } from './auth';
+import type { AuthenticatedRequest } from './auth';
 import { prisma } from './db';
 import { financeRouter } from './finance/routes';
 
