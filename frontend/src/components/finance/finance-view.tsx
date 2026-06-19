@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   ChevronLeft,
@@ -177,6 +177,65 @@ function Section({
       </div>
       {children}
     </section>
+  );
+}
+
+/* ── S&P 500 Heatmap (Tier-1: TradingView embeddable widget) ──────────────
+ * We embed TradingView's free Stock Heatmap widget instead of building our own
+ * treemap yet. Why: it ships the exact Perplexity look (sectors grouped, cells
+ * sized by market cap, colored by daily % change) AND the market-data display
+ * license is TradingView's burden — so showing ~500 US equity quotes here does
+ * NOT trigger the per-user NASDAQ/NYSE exchange-display fees a custom build would.
+ * The TradingView attribution link is required by their ToS and must stay.
+ * The branded, data-owned d3-hierarchy treemap is the planned Tier-2 upgrade.
+ */
+function Sp500Heatmap() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // React renders this subtree empty; we own it imperatively so the widget's
+    // injected iframe never fights React reconciliation. Rebuild on mount,
+    // tear down on unmount (handles React 19 StrictMode's double-invoke cleanly).
+    el.innerHTML =
+      '<div class="tradingview-widget-container__widget" style="height:calc(100% - 24px);width:100%"></div>' +
+      '<div class="tradingview-widget-copyright" style="font-size:11px;line-height:24px;text-align:right">' +
+      '<a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color:#9598a1">' +
+      "Track all markets on TradingView</a></div>";
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js";
+    script.async = true;
+    script.type = "text/javascript";
+    script.innerHTML = JSON.stringify({
+      dataSource: "SPX500",
+      blockSize: "market_cap_basic", // rectangles sized by market cap
+      blockColor: "change", // colored by daily % change (diverging red→green)
+      grouping: "sector", // grouped by GICS sector, with header labels
+      locale: "en",
+      symbolUrl: "",
+      colorTheme: "dark",
+      exchanges: [],
+      hasTopBar: false,
+      isDataSetEnabled: false,
+      isZoomEnabled: true,
+      hasSymbolTooltip: true,
+      isMonoSize: false,
+      width: "100%",
+      height: "100%",
+    });
+    el.appendChild(script);
+    return () => {
+      el.innerHTML = "";
+    };
+  }, []);
+
+  return (
+    <Section title="S&P 500 Heatmap" attribution="Live · via TradingView">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div ref={containerRef} className="tradingview-widget-container h-[440px] w-full sm:h-[540px]" />
+      </div>
+    </Section>
   );
 }
 
@@ -939,6 +998,7 @@ export function FinanceView({
                 <>
                   <TopAssets />
                   <MarketSummary />
+                  <Sp500Heatmap />
                   <DiscoverCarousel />
                 </>
               )}
