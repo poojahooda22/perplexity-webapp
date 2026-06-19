@@ -1,8 +1,18 @@
 import type { Request, Response, NextFunction } from "express";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseClient } from "./client";
 import { prisma } from "./db";
 
-const client = createSupabaseClient();
+// Create the Supabase client LAZILY (on the first authenticated request), NOT at module load.
+// index.ts imports this file at boot, and createClient() throws if the Supabase env vars are
+// missing/misnamed. Building it at load time would crash the ENTIRE serverless function — including
+// the public /finance routes that never touch Supabase — with an opaque FUNCTION_INVOCATION_FAILED.
+// Deferring keeps boot crash-proof and confines any auth-config error to the auth'd routes only.
+let _client: SupabaseClient | null = null;
+function getClient(): SupabaseClient {
+    if (!_client) _client = createSupabaseClient();
+    return _client;
+}
 
 export interface AuthenticatedRequest extends Request {
     userId?: string;
@@ -34,7 +44,7 @@ export async function middleware(req: AuthenticatedRequest, res: Response, next:
     }
 
     // Slow path: validate the token with Supabase (first request, or after TTL).
-    const data = await client.auth.getUser(token);
+    const data = await getClient().auth.getUser(token);
     const user = data.data.user;
     if (!user) return res.status(401).json({ error: "unauthorised" });
 
