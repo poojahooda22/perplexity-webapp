@@ -87,9 +87,6 @@ export function HealthView({
         {/* Header */}
         <div className="flex items-center gap-2">
           <h1 className="text-lg font-semibold tracking-tight text-foreground">Lumina Health</h1>
-          <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-            Beta
-          </span>
         </div>
 
         {/* Search box → runs the normal web-search answer flow */}
@@ -160,13 +157,13 @@ export function HealthView({
 
           {/* Right rail */}
           <aside className="space-y-4">
-            <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
+            {/* <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground">Connectors</h3>
                 <Plus className="size-4 text-muted-foreground" />
               </div>
               <p className="text-xs text-muted-foreground">Connect health providers and wearables (coming soon).</p>
-            </div>
+            </div> */}
 
             <div className="space-y-2 rounded-2xl border border-border bg-card p-4">
               <h3 className="text-sm font-semibold text-foreground">Health files</h3>
