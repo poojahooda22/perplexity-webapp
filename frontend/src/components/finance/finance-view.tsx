@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { createContext, useContext, useId, useState } from "react";
+import { motion } from "motion/react";
 import {
   ArrowUp,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -17,18 +20,19 @@ import {
   useMarketSummary,
   usePredictions,
   useResearch,
+  useSectors,
   useStocks,
 } from "@/hooks/use-finance";
 import type {
   CryptoCoin,
   DiscoverArticle,
+  Market,
   PredictionMarket,
   Quote,
   ResearchNote,
   SummarySource,
 } from "@/lib/finance-api";
 import type { Attachment } from "@/lib/api";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/animated-tabs";
 import {
   Accordion,
   AccordionContent,
@@ -39,8 +43,8 @@ import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/
 import { useLivePrices, type LiveStatus } from "@/hooks/use-live-prices";
 import { cn } from "@/lib/utils";
 
-const SUB_TABS = ["US Markets", "Crypto", "Earnings", "Research", "Predictions"] as const;
-type SubTab = (typeof SUB_TABS)[number];
+const SECTION_TABS = ["Crypto", "Research", "Predictions"] as const;
+type Tab = "Markets" | (typeof SECTION_TABS)[number];
 
 /* ── formatting ───────────────────────────────────────────────────────── */
 
@@ -49,10 +53,139 @@ const usd = (n: number) =>
   n >= 1
     ? n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 })
     : `$${n.toPrecision(3)}`;
+// Currency-aware money formatter (USD or INR). en-IN renders ₹ + lakh/crore grouping.
+const money = (n: number, currency: "USD" | "INR" = "USD") =>
+  n >= 1
+    ? n.toLocaleString(currency === "INR" ? "en-IN" : "en-US", {
+        style: "currency",
+        currency,
+        maximumFractionDigits: 2,
+      })
+    : `${currency === "INR" ? "₹" : "$"}${n.toPrecision(3)}`;
 const compact = (n: number) =>
   Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 const signed = (n: number) => `${n >= 0 ? "+" : ""}${num(n)}`;
+
+/* ── market switcher (US / India) ─────────────────────────────────────── */
+
+const MARKETS_META: Record<Market, { flag: string; label: string }> = {
+  us: { flag: "🇺🇸", label: "US Markets" },
+  in: { flag: "🇮🇳", label: "India Markets" },
+};
+
+const MarketContext = createContext<Market>("us");
+const useMarket = () => useContext(MarketContext);
+
+// One shared, springy underline indicator. All tabs (Markets + the section tabs) render this
+// with the SAME layoutId, so motion animates it between them (only the active tab mounts it).
+const TAB_SPRING = { type: "spring" as const, stiffness: 400, damping: 35 };
+
+function TabUnderline({ layoutId }: { layoutId: string }) {
+  return (
+    <motion.div
+      layoutId={layoutId}
+      className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-foreground"
+      transition={TAB_SPRING}
+    />
+  );
+}
+
+// The "Markets" tab — behaves like a real tab (clicking it from another tab navigates to the
+// Markets view, with the shared underline animating in) AND carries the US/India dropdown.
+// When already active, clicking opens the US/India menu; otherwise it just navigates.
+function MarketTab({
+  market,
+  active,
+  layoutId,
+  onActivate,
+  onSelect,
+}: {
+  market: Market;
+  active: boolean;
+  layoutId: string;
+  onActivate: () => void;
+  onSelect: (m: Market) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const meta = MARKETS_META[market];
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          if (active) setOpen((o) => !o);
+          else {
+            onActivate();
+            setOpen(false);
+          }
+        }}
+        className={cn(
+          "relative inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium transition-colors",
+          active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        {active && <TabUnderline layoutId={layoutId} />}
+        <span className="relative z-10 inline-flex items-center gap-1.5">
+          {meta.label}
+          <ChevronDown className="size-3.5" />
+        </span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-lg">
+            {(Object.keys(MARKETS_META) as Market[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  onSelect(m);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent",
+                  m === market ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <span className="text-base leading-none">{MARKETS_META[m].flag}</span>
+                {MARKETS_META[m].label}
+                {m === market && <Check className="ml-auto size-4" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// A plain section tab (Crypto/Earnings/Research/Predictions), sharing the underline layoutId.
+function SectionTab({
+  label,
+  active,
+  layoutId,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  layoutId: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "relative inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium transition-colors",
+        active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {active && <TabUnderline layoutId={layoutId} />}
+      <span className="relative z-10">{label}</span>
+    </button>
+  );
+}
 
 function timeAgo(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -80,6 +213,7 @@ function hostname(url: string): string {
 
 // Ticker → domain for company logos (favicon service). Unknown tickers fall back to a badge.
 const TICKER_DOMAIN: Record<string, string> = {
+  // US
   GOOGL: "google.com",
   GOOG: "google.com",
   NVDA: "nvidia.com",
@@ -88,6 +222,13 @@ const TICKER_DOMAIN: Record<string, string> = {
   AAPL: "apple.com",
   AMZN: "amazon.com",
   MSFT: "microsoft.com",
+  // India (watchlist tickers are stored without the .NS/.BO suffix)
+  RELIANCE: "ril.com",
+  TATATECH: "tatatechnologies.com",
+  ICICIGI: "icicilombard.com",
+  INFY: "infosys.com",
+  TCS: "tcs.com",
+  HDFCBANK: "hdfcbank.com",
 };
 
 function CompanyLogo({ symbol }: { symbol: string }) {
@@ -196,8 +337,11 @@ function Section({
  * and our app stays clean. Branded d3-hierarchy treemap is the planned Tier-2.
  */
 function Sp500Heatmap() {
+  const isIndia = useMarket() === "in";
   const config = JSON.stringify({
-    dataSource: "SPX500",
+    // India: Nifty 500 (~500 names, matches Perplexity's "Top 500 Heatmap"). If it renders blank
+    // for "NIFTY500", swap to "NIFTY50" (confirm the exact value in TradingView's heatmap settings).
+    dataSource: isIndia ? "NIFTY500" : "SPX500",
     blockSize: "market_cap_basic", // rectangles sized by market cap
     blockColor: "change", // colored by daily % change (diverging red→green)
     grouping: "sector", // grouped by GICS sector, with header labels
@@ -226,10 +370,14 @@ function Sp500Heatmap() {
     "</scr" + "ipt></div></body></html>";
 
   return (
-    <Section title="S&P 500 Heatmap" attribution="Live · via TradingView">
+    <Section title={isIndia ? "Top 500 Heatmap" : "S&P 500 Heatmap"} attribution="Live · via TradingView">
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        {/* key forces a full remount when the market switches. Mutating srcDoc on a live
+            iframe doesn't reliably reload it once the embed script has run, so without a
+            changing key the widget stays on the first market's heatmap (US). */}
         <iframe
-          title="S&P 500 Heatmap"
+          key={isIndia ? "heatmap-in" : "heatmap-us"}
+          title={isIndia ? "Top 500 Heatmap" : "S&P 500 Heatmap"}
           srcDoc={srcDoc}
           loading="lazy"
           className="h-[440px] w-full border-0 sm:h-[540px]"
@@ -368,7 +516,7 @@ function PredictionCard({ market, unit }: { market: PredictionMarket; unit?: str
 /* ── main-column sections ─────────────────────────────────────────────── */
 
 function TopAssets() {
-  const { data, isLoading, isError } = useIndices();
+  const { data, isLoading, isError } = useIndices(useMarket());
   return (
     <Section title="Top Assets" attribution={data?.provenance.attribution}>
       {data?.needsKey ? (
@@ -468,7 +616,7 @@ function SourcesDrawer({
 }
 
 function MarketSummary() {
-  const { data, isLoading, isError } = useMarketSummary();
+  const { data, isLoading, isError } = useMarketSummary(useMarket());
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const attribution = data ? `Updated ${timeAgo(data.updatedAt)}` : undefined;
   return (
@@ -583,7 +731,8 @@ function CarouselButton({
 }
 
 function DiscoverCarousel() {
-  const { data, isLoading, isError } = useDiscover();
+  const market = useMarket();
+  const { data, isLoading, isError } = useDiscover(market);
   const [page, setPage] = useState(0);
 
   const articles = data?.articles ?? [];
@@ -595,8 +744,11 @@ function DiscoverCarousel() {
     <Section title="Discover" attribution={data?.provenance.attribution}>
       {data?.needsKey ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/50 px-4 py-6 text-sm text-muted-foreground">
-          Set <code className="rounded bg-secondary px-1">FINNHUB_API_KEY</code> in{" "}
-          <code className="rounded bg-secondary px-1">backend/.env</code> to load news.
+          Set{" "}
+          <code className="rounded bg-secondary px-1">
+            {market === "in" ? "NEWSDATA_API_KEY" : "FINNHUB_API_KEY"}
+          </code>{" "}
+          in <code className="rounded bg-secondary px-1">backend/.env</code> to load news.
         </div>
       ) : isLoading || isError ? (
         <PanelState loading={isLoading} error={isError} />
@@ -807,7 +959,7 @@ function LiveBadge({ status }: { status?: LiveStatus }) {
 }
 
 function WatchlistAside({ status }: { status?: LiveStatus }) {
-  const { data, isLoading, isError } = useStocks();
+  const { data, isLoading, isError } = useStocks(useMarket());
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="mb-2 flex items-center justify-between">
@@ -836,7 +988,9 @@ function WatchlistAside({ status }: { status?: LiveStatus }) {
                 )}
               </div>
               <div className="shrink-0 text-right">
-                <div className="text-sm tabular-nums text-foreground">{usd(q.price)}</div>
+                <div className="text-sm tabular-nums text-foreground">
+                  {money(q.price, data?.currency)}
+                </div>
                 <ChangePct value={q.changePercent} />
               </div>
             </div>
@@ -878,6 +1032,78 @@ function PredictionsMiniAside() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Equity sectors — the 11 SPDR Select Sector ETFs as GICS-sector proxies (price + day %).
+// Same shape as the Watchlist: name left, price + change right. Data via useSectors (Yahoo).
+function EquitySectorsAside() {
+  const market = useMarket();
+  const { data, isLoading, isError } = useSectors(market);
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <h3 className="mb-2 text-sm font-semibold text-foreground">Equity Sectors</h3>
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading…
+        </div>
+      ) : isError || !data?.items.length ? (
+        <p className="py-2 text-xs text-muted-foreground">No sector data available.</p>
+      ) : (
+        <div className="divide-y divide-border/60">
+          {data.items.map((q) => (
+            <div key={q.symbol} className="flex items-center gap-2 py-2">
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">{q.name}</span>
+              <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                {market === "in" ? num(q.price) : usd(q.price)}
+              </span>
+              <span className="w-16 shrink-0 text-right">
+                <ChangePct value={q.changePercent} />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Popular Cryptocurrencies — top coins (stablecoins filtered out) from the SAME CoinGecko
+// data the Crypto tab uses (useCrypto is de-duped by TanStack Query, so no extra request).
+const STABLECOINS = new Set(["USDT", "USDC", "DAI", "BUSD", "TUSD", "USDE", "FDUSD", "USDS"]);
+
+function PopularCryptoAside() {
+  const { data, isLoading, isError } = useCrypto();
+  const coins = (data?.coins ?? []).filter((c) => !STABLECOINS.has(c.symbol)).slice(0, 5);
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <h3 className="mb-2 text-sm font-semibold text-foreground">Popular Cryptocurrencies</h3>
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Loading…
+        </div>
+      ) : isError || coins.length === 0 ? (
+        <p className="py-2 text-xs text-muted-foreground">No crypto data available.</p>
+      ) : (
+        <div className="divide-y divide-border/60">
+          {coins.map((c) => (
+            <div key={c.id} className="flex items-center gap-2.5 py-2">
+              <img src={c.image} alt="" className="size-7 shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-foreground">{c.name}</div>
+                <div className="truncate text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {c.symbol} · Crypto
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-sm tabular-nums text-foreground">{usd(c.price)}</div>
+                <ChangePct value={c.change24h} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -967,34 +1193,42 @@ export function FinanceView({
 }: {
   onAsk: (query: string, attachments: Attachment[]) => void;
 }) {
-  const [tab, setTab] = useState<SubTab>("US Markets");
+  const [tab, setTab] = useState<Tab>("Markets");
+  const [market, setMarket] = useState<Market>("us");
+  const tabUnderlineId = useId();
   const { stockStatus, cryptoStatus } = useLivePrices(); // Realtime subscribe + merge live ticks
-  const placeholder =
-    tab === "Crypto"
-      ? "Ask anything about crypto…"
-      : tab === "Predictions"
-        ? "Ask anything about prediction markets…"
-        : tab === "Earnings"
-          ? "Ask anything about earnings…"
-          : "Ask anything about US markets…";
+  
 
   return (
+    <MarketContext.Provider value={market}>
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-6xl px-4 py-6">
-          <Tabs type="underline" value={tab} onValueChange={(v) => setTab(v as SubTab)}>
-            <TabsList>
-              {SUB_TABS.map((t) => (
-                <TabsTrigger key={t} value={t}>
-                  {t}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className="flex items-center gap-1 border-b border-border/60">
+            <MarketTab
+              market={market}
+              active={tab === "Markets"}
+              layoutId={tabUnderlineId}
+              onActivate={() => setTab("Markets")}
+              onSelect={(m) => {
+                setMarket(m);
+                setTab("Markets");
+              }}
+            />
+            {SECTION_TABS.map((t) => (
+              <SectionTab
+                key={t}
+                label={t}
+                active={tab === t}
+                layoutId={tabUnderlineId}
+                onClick={() => setTab(t)}
+              />
+            ))}
+          </div>
 
           <div className="mt-6 flex gap-6">
             <main className="min-w-0 flex-1 space-y-8">
-              {tab === "US Markets" && (
+              {tab === "Markets" && (
                 <>
                   <TopAssets />
                   <MarketSummary />
@@ -1003,13 +1237,14 @@ export function FinanceView({
                 </>
               )}
               {tab === "Crypto" && <CryptoGrid status={cryptoStatus} />}
-              {tab === "Earnings" && <EarningsPlaceholder />}
               {tab === "Research" && <ResearchView />}
               {tab === "Predictions" && <PredictionsGrid />}
             </main>
 
             <aside className="hidden w-72 shrink-0 space-y-6 lg:block">
               <WatchlistAside status={stockStatus} />
+              <EquitySectorsAside />
+              <PopularCryptoAside />
               <PredictionsMiniAside />
             </aside>
           </div>
@@ -1022,12 +1257,13 @@ export function FinanceView({
         <div className="mx-auto w-full max-w-6xl px-4">
           <div className="flex gap-6">
             <div className="min-w-0 flex-1">
-              <FinanceComposer onAsk={onAsk} placeholder={placeholder} />
+              <FinanceComposer onAsk={onAsk} placeholder="Ask about finance..." />
             </div>
             <div className="hidden w-72 shrink-0 lg:block" />
           </div>
         </div>
       </div>
     </div>
+    </MarketContext.Provider>
   );
 }

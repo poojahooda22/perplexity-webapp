@@ -98,6 +98,8 @@ interface StreamOpts {
   model?: string;
   /** Attached images/documents the model should analyze. */
   attachments?: Attachment[];
+  /** Which chat vertical to use server-side: "discover" (web search) or "finance" (tool agent). */
+  vertical?: "discover" | "finance";
 }
 
 async function streamPost(
@@ -140,7 +142,13 @@ export function streamAsk(
 ): Promise<AskResult> {
   return streamPost(
     "/perplexity_ask",
-    { query, conversationId: opts.conversationId, model: opts.model, attachments: opts.attachments },
+    {
+      query,
+      conversationId: opts.conversationId,
+      model: opts.model,
+      attachments: opts.attachments,
+      vertical: opts.vertical,
+    },
     opts,
   );
 }
@@ -153,7 +161,7 @@ export function streamFollowUp(
 ): Promise<AskResult> {
   return streamPost(
     "/perplexity_ask/follow_up",
-    { conversationId, query, model: opts.model, attachments: opts.attachments },
+    { conversationId, query, model: opts.model, attachments: opts.attachments, vertical: opts.vertical },
     opts,
   );
 }

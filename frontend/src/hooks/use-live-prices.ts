@@ -60,7 +60,8 @@ export function useLivePrices(channel = "prices:top") {
       if (stockBuf.current.size) {
         const ticks = stockBuf.current;
         stockBuf.current = new Map();
-        qc.setQueryData<QuotesPayload>(["finance", "stocks"], (prev) =>
+        // US watchlist only — India stocks are delayed (no live worker feed).
+        qc.setQueryData<QuotesPayload>(["finance", "stocks", "us"], (prev) =>
           prev
             ? {
                 ...prev,

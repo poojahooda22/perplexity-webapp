@@ -40,14 +40,8 @@ function coingeckoHeaders(): Record<string, string> {
   return key ? { "x-cg-demo-api-key": key } : {};
 }
 
-export async function fetchCrypto(): Promise<CryptoPayload> {
-  const url =
-    `${COINGECKO_BASE}/coins/markets?vs_currency=usd&order=market_cap_desc` +
-    `&per_page=12&page=1&sparkline=true&price_change_percentage=24h`;
-  const res = await fetch(url, { headers: coingeckoHeaders() });
-  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
-  const rows = (await res.json()) as Array<Record<string, any>>;
-  const coins: CryptoCoin[] = rows.map((c) => ({
+function mapCoinGeckoRow(c: Record<string, any>): CryptoCoin {
+  return {
     id: String(c.id),
     symbol: String(c.symbol ?? "").toUpperCase(),
     name: String(c.name ?? ""),
@@ -56,15 +50,48 @@ export async function fetchCrypto(): Promise<CryptoPayload> {
     change24h: c.price_change_percentage_24h != null ? Number(c.price_change_percentage_24h) : null,
     marketCap: c.market_cap != null ? Number(c.market_cap) : null,
     sparkline: Array.isArray(c.sparkline_in_7d?.price) ? c.sparkline_in_7d.price.map(Number) : [],
-  }));
-  return {
-    coins,
-    provenance: {
-      source: "CoinGecko",
-      commercialOk: false, // Demo tier = personal use; flip true on a paid commercial plan.
-      attribution: "Data provided by CoinGecko",
-    },
   };
+}
+
+function cgProvenance(): Provenance {
+  return {
+    source: "CoinGecko",
+    commercialOk: false, // Demo tier = personal use; flip true on a paid commercial plan.
+    attribution: "Data provided by CoinGecko",
+  };
+}
+
+export async function fetchCrypto(): Promise<CryptoPayload> {
+  const url =
+    `${COINGECKO_BASE}/coins/markets?vs_currency=usd&order=market_cap_desc` +
+    `&per_page=12&page=1&sparkline=true&price_change_percentage=24h`;
+  const res = await fetch(url, { headers: coingeckoHeaders() });
+  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+  const rows = (await res.json()) as Array<Record<string, any>>;
+  return { coins: rows.map(mapCoinGeckoRow), provenance: cgProvenance() };
+}
+
+// Parameterized crypto fetch (agent-tool backend) — prices/market data for a SPECIFIC set
+// of CoinGecko coin ids (e.g. ["bitcoin","ethereum"]) so the chat agent can answer
+// "BTC vs ETH". Demo tier limits still apply, so callers go through getOrRefresh + the
+// rate limiter. Threads an AbortSignal (client disconnect) combined with a hard timeout.
+export async function fetchCryptoMarkets(
+  ids: string[],
+  opts: { signal?: AbortSignal } = {},
+): Promise<CryptoPayload> {
+  const list = [...new Set(ids.map((s) => s.trim().toLowerCase()).filter(Boolean))].slice(0, 20);
+  if (list.length === 0) return { coins: [], provenance: cgProvenance() };
+
+  const timeout = AbortSignal.timeout(8000);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+
+  const url =
+    `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=${encodeURIComponent(list.join(","))}` +
+    `&order=market_cap_desc&per_page=${list.length}&page=1&sparkline=false&price_change_percentage=24h`;
+  const res = await fetch(url, { headers: coingeckoHeaders(), signal });
+  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+  const rows = (await res.json()) as Array<Record<string, any>>;
+  return { coins: rows.map(mapCoinGeckoRow), provenance: cgProvenance() };
 }
 
 /* ── Prediction markets (Polymarket) ──────────────────────────────────── */
@@ -217,7 +244,13 @@ export type Quote = {
   changePercent: number | null;
   sparkline?: number[];
 };
-export type QuotesPayload = { items: Quote[]; provenance: Provenance; needsKey?: boolean };
+export type Market = "us" | "in";
+export type QuotesPayload = {
+  items: Quote[];
+  provenance: Provenance;
+  needsKey?: boolean;
+  currency?: "USD" | "INR";
+};
 
 // ── Top Assets via Yahoo (real index values + sparkline, no key, no credit limit) ──
 const YAHOO_INDICES: { symbol: string; name: string }[] = [
@@ -225,6 +258,25 @@ const YAHOO_INDICES: { symbol: string; name: string }[] = [
   { symbol: "^IXIC", name: "NASDAQ" },
   { symbol: "^DJI", name: "Dow Jones" },
   { symbol: "^VIX", name: "VIX" },
+];
+
+// India indices (Yahoo, keyless, INR/IST) — values live-verified to match Perplexity's India tab.
+const INDIA_INDICES: { symbol: string; name: string }[] = [
+  { symbol: "^NSEI", name: "NIFTY 50" },
+  { symbol: "^BSESN", name: "S&P BSE Sensex" },
+  { symbol: "^NSEBANK", name: "Nifty Bank" },
+  { symbol: "^CNXIT", name: "Nifty IT" },
+];
+
+// India watchlist via Yahoo (.NS = NSE, .BO = BSE). Twelve Data's FREE tier EXCLUDES NSE/BSE, so
+// India stocks ride the same keyless Yahoo path as the indices — no key, returns INR natively.
+const INDIA_WATCHLIST: { symbol: string; name: string }[] = [
+  { symbol: "RELIANCE.BO", name: "Reliance Industries" },
+  { symbol: "TATATECH.NS", name: "Tata Technologies" },
+  { symbol: "ICICIGI.NS", name: "ICICI Lombard" },
+  { symbol: "INFY.NS", name: "Infosys" },
+  { symbol: "TCS.NS", name: "TCS" },
+  { symbol: "HDFCBANK.NS", name: "HDFC Bank" },
 ];
 
 async function fetchYahooQuote(symbol: string, fallbackName: string): Promise<Quote | null> {
@@ -237,10 +289,18 @@ async function fetchYahooQuote(symbol: string, fallbackName: string): Promise<Qu
     const meta = result?.meta;
     if (!meta || typeof meta.regularMarketPrice !== "number") return null;
     const price = meta.regularMarketPrice as number;
-    const prev = typeof meta.chartPreviousClose === "number" ? meta.chartPreviousClose : null;
     const closes: number[] = (result?.indicators?.quote?.[0]?.close ?? []).filter(
       (n: unknown): n is number => typeof n === "number",
     );
+    // DAILY change: the previous close is YESTERDAY's. With interval=1d the last close is
+    // today's, so yesterday is the second-to-last close. (meta.chartPreviousClose is the close
+    // before the ENTIRE range — ~1mo ago — which would give the monthly move, not the daily.)
+    const prev =
+      closes.length >= 2
+        ? closes[closes.length - 2]!
+        : typeof meta.chartPreviousClose === "number"
+          ? meta.chartPreviousClose
+          : null;
     return {
       symbol,
       name: fallbackName, // our curated short label ("S&P 500", "NASDAQ", "Dow Jones", "VIX")
@@ -254,15 +314,68 @@ async function fetchYahooQuote(symbol: string, fallbackName: string): Promise<Qu
   }
 }
 
-export async function fetchIndices(): Promise<QuotesPayload> {
-  const items = await Promise.all(YAHOO_INDICES.map((i) => fetchYahooQuote(i.symbol, i.name)));
+export async function fetchIndices(market: Market = "us"): Promise<QuotesPayload> {
+  const list = market === "in" ? INDIA_INDICES : YAHOO_INDICES;
+  const items = await Promise.all(list.map((i) => fetchYahooQuote(i.symbol, i.name)));
   return {
     items: items.filter((q): q is Quote => q !== null),
     provenance: {
       source: "Yahoo Finance",
       commercialOk: false,
-      attribution: "Index data via Yahoo Finance",
+      attribution:
+        market === "in" ? "India index data via Yahoo Finance (delayed)" : "Index data via Yahoo Finance",
     },
+    currency: market === "in" ? "INR" : "USD",
+  };
+}
+
+// ── Equity sectors via the SPDR Select Sector ETFs (Yahoo, same path as indices) ──
+// Perplexity's "Equity Sectors" card is the 11 GICS sectors shown as their tradeable
+// SPDR ETF PROXIES (price + daily % change). We reuse the same keyless Yahoo chart API
+// as the indices — 11 symbols, no credit limit, real values. ETF proxy → commercialOk:false.
+const SECTOR_ETFS: { symbol: string; name: string }[] = [
+  { symbol: "XLK", name: "Technology" },
+  { symbol: "XLE", name: "Energy" },
+  { symbol: "XLY", name: "Consumer Cyclical" },
+  { symbol: "XLP", name: "Consumer Defensive" },
+  { symbol: "XLC", name: "Communication Services" },
+  { symbol: "XLI", name: "Industrials" },
+  { symbol: "XLF", name: "Financial Services" },
+  { symbol: "XLU", name: "Utilities" },
+  { symbol: "XLB", name: "Basic Materials" },
+  { symbol: "XLRE", name: "Real Estate" },
+  { symbol: "XLV", name: "Healthcare" },
+];
+
+// India "Equity Sectors" = the NSE sectoral INDICES (Yahoo, keyless). Unlike the US SPDR ETFs
+// (tradeable $ prices), these are index POINTS — the frontend formats them with num(), not a
+// currency symbol. All symbols live-verified to return data via the Yahoo chart API.
+const INDIA_SECTORS: { symbol: string; name: string }[] = [
+  { symbol: "^CNXIT", name: "Nifty IT" },
+  { symbol: "^NSEBANK", name: "Nifty Bank" },
+  { symbol: "^CNXAUTO", name: "Nifty Auto" },
+  { symbol: "^CNXFMCG", name: "Nifty FMCG" },
+  { symbol: "^CNXPHARMA", name: "Nifty Pharma" },
+  { symbol: "^CNXMETAL", name: "Nifty Metal" },
+  { symbol: "^CNXENERGY", name: "Nifty Energy" },
+  { symbol: "^CNXFIN", name: "Nifty Fin Services" },
+  { symbol: "^CNXREALTY", name: "Nifty Realty" },
+  { symbol: "^CNXMEDIA", name: "Nifty Media" },
+  { symbol: "^CNXINFRA", name: "Nifty Infra" },
+];
+
+export async function fetchSectors(market: Market = "us"): Promise<QuotesPayload> {
+  const list = market === "in" ? INDIA_SECTORS : SECTOR_ETFS;
+  const items = await Promise.all(list.map((s) => fetchYahooQuote(s.symbol, s.name)));
+  return {
+    items: items.filter((q): q is Quote => q !== null),
+    provenance: {
+      source: "Yahoo Finance",
+      commercialOk: false,
+      attribution:
+        market === "in" ? "India sector indices via Yahoo Finance (delayed)" : "Sector ETF data via Yahoo Finance",
+    },
+    currency: market === "in" ? "INR" : "USD",
   };
 }
 
@@ -295,9 +408,25 @@ function parseTdQuote(symbol: string, name: string, q: any): Quote | null {
   };
 }
 
-export async function fetchStocks(): Promise<QuotesPayload> {
+export async function fetchStocks(market: Market = "us"): Promise<QuotesPayload> {
+  // India: Twelve Data's free tier excludes NSE/BSE, so the India watchlist uses the keyless Yahoo
+  // path (returns INR). Strip the .NS/.BO suffix for display (TATATECH.NS → TATATECH).
+  if (market === "in") {
+    const items = (await Promise.all(INDIA_WATCHLIST.map((s) => fetchYahooQuote(s.symbol, s.name))))
+      .filter((q): q is Quote => q !== null)
+      .map((q) => ({ ...q, symbol: q.symbol.replace(/\.(NS|BO)$/i, "") }));
+    return {
+      items,
+      provenance: {
+        source: "Yahoo Finance",
+        commercialOk: false,
+        attribution: "India stock data via Yahoo Finance (delayed)",
+      },
+      currency: "INR",
+    };
+  }
   const key = twelveKey();
-  if (!key) return { items: [], provenance: tdProvenance(), needsKey: true };
+  if (!key) return { items: [], provenance: tdProvenance(), needsKey: true, currency: "USD" };
   const url = `${TWELVE_BASE}/quote?symbol=${encodeURIComponent(DEFAULT_WATCHLIST.join(","))}&apikey=${key}`;
   const res = await fetchWithTimeout(url, TWELVE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`TwelveData ${res.status}`);
@@ -311,5 +440,44 @@ export async function fetchStocks(): Promise<QuotesPayload> {
   const items = DEFAULT_WATCHLIST.map((sym) => parseTdQuote(sym, "", quotes[sym])).filter(
     (q): q is Quote => q !== null,
   );
+  return { items, provenance: tdProvenance(), currency: "USD" };
+}
+
+// ── Parameterized quote fetch (agent-tool backend) ─────────────────────────
+// Same Twelve Data /quote call as fetchStocks(), but for an ARBITRARY symbol set so the
+// finance chat agent can answer "price of MSFT". 1 credit PER symbol and the free cap is
+// 8 credits/min, so callers MUST go through getOrRefresh (cache + in-flight de-dupe) and
+// the finance rate limiter. We hard-cap at 8 symbols/call as a backstop and thread an
+// optional AbortSignal so a client disconnect cancels the in-flight vendor call (and stops
+// burning the credit budget). Combined with a hard timeout via AbortSignal.any.
+export async function fetchQuotes(
+  symbols: string[],
+  opts: { signal?: AbortSignal } = {},
+): Promise<QuotesPayload> {
+  const list = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, 8);
+  if (list.length === 0) return { items: [], provenance: tdProvenance() };
+  const key = twelveKey();
+  if (!key) return { items: [], provenance: tdProvenance(), needsKey: true };
+
+  const timeout = AbortSignal.timeout(TWELVE_TIMEOUT_MS);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+
+  const url = `${TWELVE_BASE}/quote?symbol=${encodeURIComponent(list.join(","))}&apikey=${key}`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`TwelveData ${res.status}`);
+  const data = (await res.json()) as Record<string, any>;
+  if (data && (data.status === "error" || data.code)) {
+    // 429 = credit/rate limit → a REAL failure; surface it so getOrRefresh can serve stale.
+    if (Number(data.code) === 429) throw new Error(`TwelveData: ${data.message ?? "rate limited"}`);
+    // Otherwise a single-symbol top-level error is just an unknown/bad ticker (TD returns the
+    // quote directly for 1 symbol). Degrade gracefully to empty instead of throwing the whole
+    // tool turn — consistent with the multi-symbol path, which drops bad symbols via parseTdQuote.
+    if (list.length === 1) return { items: [], provenance: tdProvenance() };
+    throw new Error(`TwelveData: ${data.message ?? "error"}`);
+  }
+  const quotes = list.length === 1 ? { [list[0]!]: data } : data;
+  const items = list
+    .map((sym) => parseTdQuote(sym, "", quotes[sym]))
+    .filter((q): q is Quote => q !== null);
   return { items, provenance: tdProvenance() };
 }

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { ArrowUp, Briefcase, FileText, Map as MapIcon, Presentation } from "lucide-react";
 
-import { PerplexityWordmark } from "@/components/brand";
+import { LuminaWordmark } from "@/components/brand";
 import { ModelMenu } from "@/components/model-menu";
 import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/attachments";
 import type { Attachment } from "@/lib/api";
@@ -44,7 +44,7 @@ export function SearchHero({
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 pb-24">
-      <PerplexityWordmark className="mb-10" />
+      <LuminaWordmark className="mb-10" />
 
       <form
         onSubmit={(e) => { e.preventDefault(); submit(); }}

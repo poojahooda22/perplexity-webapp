@@ -35,9 +35,21 @@ const redis =
 
 export const cacheBackend: "upstash" | "memory" = redis ? "upstash" : "memory";
 
-// In-memory fallback (local dev). Keep entries past their TTL so the stale-on-error
-// fallback has something to serve; this Map is tiny (a handful of finance keys).
+// In-memory fallback (local dev / any instance without Upstash). Keep entries past their TTL
+// so the stale-on-error fallback has something to serve. Agent tools key on model-chosen
+// symbol sets (e.g. finance:quote:<symbols>), so the keyspace is UNbounded — cap the Map and
+// evict oldest-inserted entries (Map preserves insertion order) to prevent unbounded growth.
+const MEM_MAX_ENTRIES = 500;
 const mem = new Map<string, Entry<unknown>>();
+function memSet(key: string, entry: Entry<unknown>): void {
+  mem.delete(key); // re-insert at the end so recently-written keys are evicted last
+  mem.set(key, entry);
+  while (mem.size > MEM_MAX_ENTRIES) {
+    const oldest = mem.keys().next().value;
+    if (oldest === undefined) break;
+    mem.delete(oldest);
+  }
+}
 // Redis hard-TTL = soft TTL × this, so a stale value survives long enough to be a fallback.
 const HARD_TTL_MULTIPLIER = 12;
 
@@ -54,7 +66,7 @@ async function writeEntry<T>(key: string, entry: Entry<T>, ttlSeconds: number): 
   if (redis) {
     await redis.set(key, entry, { ex: Math.max(1, Math.floor(ttlSeconds * HARD_TTL_MULTIPLIER)) });
   } else {
-    mem.set(key, entry as Entry<unknown>);
+    memSet(key, entry as Entry<unknown>);
   }
 }
 

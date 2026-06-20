@@ -20,7 +20,7 @@ import {
 
 import type { ConversationSummary } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { PerplexityMark } from "@/components/brand";
+import { LuminaMark } from "@/components/brand";
 import { ProfileMenu } from "@/components/profile-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -38,12 +38,12 @@ interface NavEntry {
   icon: IconType;
 }
 
-const PRIMARY_NAV: NavEntry[] = [
-  { id: "computer", label: "Computer", icon: Monitor },
-  { id: "spaces", label: "Spaces", icon: LayoutGrid },
-  { id: "artifacts", label: "Artifacts", icon: Box },
-  { id: "customize", label: "Customize", icon: SlidersHorizontal },
-];
+// const PRIMARY_NAV: NavEntry[] = [
+//   { id: "computer", label: "Computer", icon: Monitor },
+//   { id: "spaces", label: "Spaces", icon: LayoutGrid },
+//   { id: "artifacts", label: "Artifacts", icon: Box },
+//   { id: "customize", label: "Customize", icon: SlidersHorizontal },
+// ];
 
 const SECONDARY_NAV: NavEntry[] = [
   { id: "connectors", label: "Connectors", icon: Plug },
@@ -143,8 +143,8 @@ export function Sidebar({
       <div className={cn("flex h-14 items-center gap-2 px-3", collapsed && "justify-center px-0")}>
         {!collapsed && (
           <div className="flex flex-1 items-center gap-2 px-1 text-foreground">
-            <PerplexityMark className="size-5" />
-            <span className="text-sm font-semibold tracking-tight">perplexity</span>
+            <LuminaMark className="size-5" />
+            <span className="text-sm font-semibold tracking-tight">Lumina</span>
           </div>
         )}
         <button
@@ -163,10 +163,11 @@ export function Sidebar({
           type="button"
           onClick={onNewChat}
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-sm font-medium text-sidebar-foreground transition-colors",
+            "flex items-center gap-3 border border-sidebar-border bg-sidebar-accent/40 text-sm font-medium text-sidebar-foreground transition-colors",
             "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            collapsed && "justify-center px-0",
+            // Collapsed → a centered circle; expanded → a full-width pill.
+            collapsed ? "mx-auto size-9 justify-center rounded-full" : "w-full rounded-lg px-3 py-2",
           )}
         >
           <Plus className="size-[18px] shrink-0" />
@@ -176,18 +177,20 @@ export function Sidebar({
 
       {/* Nav + history */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {PRIMARY_NAV.map((item) => (
+        {/* {PRIMARY_NAV.map((item) => (
           <NavRow key={item.id} icon={item.icon} label={item.label} collapsed={collapsed} />
-        ))}
+        ))} */}
 
-        <div className="my-2 border-t border-sidebar-border" />
+        <div className="my-2 " />
 
         {SECONDARY_NAV.map((item) => (
           <NavRow key={item.id} icon={item.icon} label={item.label} collapsed={collapsed} />
         ))}
 
-        {/* History */}
-        {!collapsed && (
+        {/* History — when collapsed, show just an icon that re-expands the sidebar on click */}
+        {collapsed ? (
+          <NavRow icon={Clock} label="History" collapsed onClick={() => setCollapsed(false)} />
+        ) : (
           <div className="pt-4">
             <div className="flex items-center gap-2 px-3 pb-3 text-sm font-medium text-muted-foreground">
               <Clock className="size-3.5" />

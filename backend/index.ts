@@ -1,6 +1,6 @@
 import { tavily } from '@tavily/core';
 import express from 'express';
-import { streamText, embed, generateText } from 'ai';
+import { streamText, embed, generateText, stepCountIs } from 'ai';
 import { buildSystemPrompt, buildUserPrompt, classifyQuery } from './prompt.js';
 // NOTE: this file is named auth.ts, NOT middleware.ts, on purpose. Vercel treats a
 // root-level `middleware.ts` as Edge Middleware (V8 isolates, no Node modules) and the
@@ -9,6 +9,9 @@ import { middleware } from './auth.js';
 import type { AuthenticatedRequest } from './auth.js';
 import { prisma } from './db.js';
 import { financeRouter } from './finance/routes.js';
+import { buildFinanceTools } from './finance/tools.js';
+import { buildFinanceSystem } from './finance/skills.js';
+import { discoverRouter } from './discover/routes.js';
 
 const app = express();
 
@@ -47,6 +50,9 @@ app.use((req, res, next) => {
 // Finance tab — public market-data reads (cached + rate-limited) + cron warmer.
 // Mounted before auth so these stay public; each route caches upstream calls.
 app.use("/finance", financeRouter);
+
+// Discover tabs (health / academic) — public, cached card feeds, same pattern as finance.
+app.use("/discover", discoverRouter);
 
 // Vercel AI Gateway model ids (`<provider>/<model>`, dot in the model segment).
 // A bare string model routes through the gateway (uses AI_GATEWAY_API_KEY), giving
@@ -133,6 +139,84 @@ function sourcesImagesTail(sources: unknown, images: unknown): string {
     );
 }
 
+// AbortSignal that fires when the client disconnects mid-stream, so the model/tool loop stops
+// burning tokens (and, for finance, vendor credits) on a response nobody will read.
+function disconnectSignal(res: express.Response): AbortSignal {
+    const ac = new AbortController();
+    res.on("close", () => { if (!res.writableFinished) ac.abort(); });
+    return ac.signal;
+}
+
+// The SSE/streaming response headers, centralized so the (subtle, Vercel-specific) set + flush
+// stays identical across every streaming branch.
+function writeStreamHeaders(res: express.Response, conversationId: string): void {
+    res.setHeader("x-conversation-id", conversationId);
+    res.header("Cache-Control", "no-cache");
+    res.header("Content-Type", "text/event-stream");
+    res.setHeader("X-Accel-Buffering", "no"); // defeat proxy/LB buffering so tokens stream
+    res.flushHeaders?.();
+}
+
+const EMPTY_ANSWER_PLACEHOLDER =
+    "⚠️ Sorry — I couldn't generate an answer for that. Please try rephrasing.";
+
+// Persist both turns AFTER the client has its answer but BEFORE res.end() (on Vercel the
+// instance can freeze the instant the response closes). Awaits the user turn first so its
+// autoincrement id stays below the assistant turn's. If the model produced no prose, write a
+// placeholder assistant turn so the thread never dangles (preserves the user/assistant
+// alternation that compaction + Anthropic require).
+async function persistTurns(
+    persistUserTurn: Promise<unknown>,
+    conversationId: string,
+    fullAnswer: string,
+    tail: string,
+): Promise<void> {
+    await persistUserTurn;
+    const content = fullAnswer.trim() ? fullAnswer + tail : EMPTY_ANSWER_PLACEHOLDER;
+    await prisma.message.create({ data: { content, role: "Assistant", conversationId } });
+}
+
+// FINANCE vertical: stream an agentic answer (streamText + the finance tool belt, multi-step
+// loop) then the SAME <SOURCES> wire tail. Sources are collected from financeWebSearch tool
+// calls during the stream, so the client renders finance answers exactly like Discover ones.
+async function streamFinanceAnswer(opts: {
+    res: import("express").Response;
+    model: string;
+    system: string;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<{ fullAnswer: string; tail: string; finishReason: string }> {
+    const { tools, sources } = buildFinanceTools();
+    const result = streamText({
+        model: opts.model,
+        system: opts.system,
+        messages: opts.messages,
+        tools,
+        stopWhen: stepCountIs(6), // bound tool round-trips per turn
+        abortSignal: disconnectSignal(opts.res), // stop the tool loop if the client disconnects
+        // Observe hook (pi "message/step end") — log which tools each step used.
+        onStepFinish: (step) => {
+            const used = (step.toolCalls ?? []).map((c) => c.toolName);
+            if (used.length) console.log(`[finance-hook] step tools=[${used.join(",")}] finish=${step.finishReason}`);
+        },
+        onError: ({ error }) => console.error("finance streamText error:", error),
+    });
+    let fullAnswer = "";
+    for await (const textPart of result.textStream) {
+        fullAnswer += textPart;
+        opts.res.write(textPart);
+    }
+    let finishReason: string;
+    try {
+        finishReason = await result.finishReason;
+    } catch {
+        finishReason = "error";
+    }
+    // `sources` was populated by financeWebSearch during the stream above.
+    const tail = sourcesImagesTail(sources, []);
+    opts.res.write(tail);
+    return { fullAnswer, tail, finishReason };
+}
+
 // Turn user-attached images/documents into AI-SDK multimodal content parts.
 // Images become `image` parts; everything else (PDFs, docs) becomes `file` parts.
 // The model must be vision/doc-capable (Claude, Gemini, GPT) — Sonar won't read them.
@@ -184,6 +268,10 @@ function stripWireTail(content: string): string {
     return content
         .replace(/\n?<SOURCES>[\s\S]*?<SOURCES>\n?/g, "")
         .replace(/\n?<IMAGES>[\s\S]*?<IMAGES>\n?/g, "")
+        // Drop the model's own output-protocol markup so follow-ups don't replay it as context
+        // (the persona wraps answers in <ANSWER>…</ANSWER> + a <FOLLOW_UPS> block).
+        .replace(/<FOLLOW_UPS>[\s\S]*?<\/FOLLOW_UPS>/g, "") // suggested-questions block — drop entirely
+        .replace(/<\/?ANSWER>/g, "")                         // unwrap the answer, keep its text
         .trim();
 }
 
@@ -480,12 +568,29 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             });
         }
 
-        // Persist the user's message WITHOUT blocking the search. We await this promise
-        // only just before writing the assistant turn, so the autoincrement message order
-        // stays correct while this write overlaps the slow search + LLM call.
-        const persistUserTurn = prisma.message.create({
-            data: { content: query, role: "user", conversationId: conversation.id },
-        });
+        // Persist the user's message WITHOUT blocking the search. We await it (via persistTurns)
+        // only just before the assistant turn, so message order stays correct while this write
+        // overlaps the search + LLM. The .catch makes it a non-rejecting promise so an error mid-
+        // stream (which skips the await) can never become an unhandled rejection.
+        const persistUserTurn = prisma.message
+            .create({ data: { content: query, role: "user", conversationId: conversation.id } })
+            .catch((e) => { console.error("[persist] user turn failed:", e); return null; });
+
+        // FINANCE vertical → agentic tool-calling chat. No semantic cache and no pre-search
+        // (the model fetches its own data via tools). Shares auth, persistence, streaming, and
+        // the <ANSWER>/<SOURCES> wire format with Discover.
+        if (req.body.vertical === "finance") {
+            writeStreamHeaders(res, conversation.id);
+            const { fullAnswer, tail } = await streamFinanceAnswer({
+                res,
+                model: resolveModel(req.body.model),
+                system: buildFinanceSystem(),
+                messages: [{ role: "user", content: query }],
+            });
+            await persistTurns(persistUserTurn, conversation.id, fullAnswer, tail);
+            res.end();
+            return;
+        }
 
         // step 3 - SEMANTIC CACHE. Resolve the model up front (the cache is keyed on it).
         //          Skip the cache entirely for time-sensitive queries (prices/news/"today")
@@ -496,27 +601,17 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
         const embedding = cacheable ? await embedQuery(query) : null;
         const cached = cacheable ? await findCachedAnswer(embedding, model) : null;
 
-        // Tell the client which conversation this is (read via the exposed header).
-        res.setHeader("x-conversation-id", conversation.id);
-        res.header("Cache-Control", "no-cache");
-        res.header("Content-Type", "text/event-stream");
-        // Defeat proxy/load-balancer buffering so tokens actually stream (e.g. on Vercel).
-        res.setHeader("X-Accel-Buffering", "no");
-        res.flushHeaders?.();
+        writeStreamHeaders(res, conversation.id);
 
         if (cached) {
             // Cache HIT — replay the stored answer (+ its sources/images) in the SAME wire
             // format as a live answer, so the client handles both identically. Skips Tavily
-            // AND the LLM entirely → sub-second response. Persist BEFORE res.end(): on Vercel
-            // the instance can freeze the moment the response closes, so post-end writes may
-            // never run.
+            // AND the LLM entirely → sub-second response. persistTurns runs BEFORE res.end()
+            // (on Vercel the instance can freeze the moment the response closes).
             const tail = sourcesImagesTail(cached.sources, cached.images);
             res.write(cached.answer);
             res.write(tail);
-            await persistUserTurn; // user turn lands before the assistant turn (id ordering)
-            await prisma.message.create({
-                data: { content: cached.answer + tail, role: "Assistant", conversationId: conversation.id },
-            });
+            await persistTurns(persistUserTurn, conversation.id, cached.answer, tail);
             res.end();
             return;
         }
@@ -540,6 +635,7 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             model,   // resolved above; also the cache key
             system: buildSystemPrompt(queryType),
             messages: [{ role: "user", content: userContent }],
+            abortSignal: disconnectSignal(res), // stop generating if the client disconnects
             // streamText swallows mid-stream errors by default — surface them
             onError: ({ error }) => console.error("streamText error:", error),
         });
@@ -559,16 +655,11 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
 
         // step 8 - persist BEFORE closing. On Vercel the instance can freeze the instant the
         //          response ends, so post-end DB writes (history + cache) may never run.
-        await persistUserTurn; // user turn id stays below the assistant turn's
-        if (fullAnswer.trim()) {
-            await prisma.message.create({
-                data: { content: fullAnswer + tail, role: "Assistant", conversationId: conversation.id },
-            });
-            // Cache ONLY a complete answer for a cacheable query — never replay a
-            // truncated/errored answer (or a time-sensitive one) for the whole TTL.
-            if (cacheable && finishReason === "stop") {
-                await cacheAnswer({ query, embedding, model, answer: fullAnswer, sources, images });
-            }
+        await persistTurns(persistUserTurn, conversation.id, fullAnswer, tail);
+        // Cache ONLY a complete answer for a cacheable query — never replay a truncated/errored
+        // answer (or a time-sensitive one) for the whole TTL.
+        if (cacheable && finishReason === "stop" && fullAnswer.trim()) {
+            await cacheAnswer({ query, embedding, model, answer: fullAnswer, sources, images });
         }
 
         // step 9 - close the stream
@@ -617,12 +708,31 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
         });
         if (!conversation) return res.status(404).json({ error: "Conversation not found" });
 
-        // Persist the new user turn WITHOUT blocking. The history below is built from the
-        // already-stored turns, so this isn't needed until we save the assistant reply —
-        // awaited later to preserve message order.
-        const persistUserTurn = prisma.message.create({
-            data: { content: query, role: "user", conversationId: conversation.id },
-        });
+        // Persist the new user turn WITHOUT blocking. History below is built from the already-
+        // stored turns, so this isn't needed until the assistant reply. The .catch makes it non-
+        // rejecting so a mid-stream error that skips the await can't become an unhandled rejection.
+        const persistUserTurn = prisma.message
+            .create({ data: { content: query, role: "user", conversationId: conversation.id } })
+            .catch((e) => { console.error("[persist] user turn failed:", e); return null; });
+
+        // FINANCE vertical → agentic tool-calling follow-up. Reuse compaction for history,
+        // but skip the web pre-search (the model fetches what it needs via tools).
+        if (req.body.vertical === "finance") {
+            const { summary, history } = await buildConversationHistory(conversation.messages);
+            const system = summary
+                ? `${buildFinanceSystem()}\n\n## Earlier conversation (summary of older turns)\n${summary}`
+                : buildFinanceSystem();
+            writeStreamHeaders(res, conversation.id);
+            const { fullAnswer, tail } = await streamFinanceAnswer({
+                res,
+                model: resolveModel(req.body.model),
+                system,
+                messages: [...history, { role: "user" as const, content: query }],
+            });
+            await persistTurns(persistUserTurn, conversation.id, fullAnswer, tail);
+            res.end();
+            return;
+        }
 
         // step 2 - build bounded context (compaction) AND fetch fresh sources, concurrently.
         // Compaction strips UI blobs, keeps the last few turns verbatim, and summarizes older
@@ -636,11 +746,7 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
         const augmentedQuery = buildUserPrompt({ query, searchContext: formatSearchContext(results), date: today });
 
         // step 3 - forward the (compacted) history + the augmented new query to the LLM
-        res.setHeader("x-conversation-id", conversation.id);
-        res.header("Cache-Control", "no-cache");
-        res.header("Content-Type", "text/event-stream");
-        res.setHeader("X-Accel-Buffering", "no"); // defeat proxy buffering so tokens stream
-        res.flushHeaders?.();
+        writeStreamHeaders(res, conversation.id);
 
         const followUpParts = buildAttachmentParts(req.body.attachments);
         const followUpContent: string | ContentPart[] = followUpParts.length
@@ -656,10 +762,11 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
             model: resolveModel(req.body.model),
             system,
             messages: [...history, { role: "user" as const, content: followUpContent }],
+            abortSignal: disconnectSignal(res), // stop generating if the client disconnects
             onError: ({ error }) => console.error("streamText error:", error),
         });
 
-        // step 3 - stream the response to the user
+        // step 4 - stream the response to the user
         let fullAnswer = "";
         for await (const textPart of result.textStream) {
             fullAnswer += textPart;
@@ -668,14 +775,8 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
         const tail = sourcesImagesTail(sources, images);
         res.write(tail);
 
-        // persist BEFORE closing (on Vercel the instance can freeze the instant the response
-        // ends). Await the user turn first so its id stays below the assistant turn's.
-        await persistUserTurn;
-        if (fullAnswer.trim()) {
-            await prisma.message.create({
-                data: { content: fullAnswer + tail, role: "Assistant", conversationId: conversation.id },
-            });
-        }
+        // persist BEFORE closing (on Vercel the instance can freeze the instant the response ends)
+        await persistTurns(persistUserTurn, conversation.id, fullAnswer, tail);
         res.end();
     } catch (err) {
         console.error("Follow-up failed:", err);

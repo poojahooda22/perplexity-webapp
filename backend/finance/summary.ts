@@ -9,7 +9,7 @@ import { tavily } from "@tavily/core";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-import type { Provenance } from "./sources.js";
+import type { Market, Provenance } from "./sources.js";
 
 const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
 
@@ -34,11 +34,18 @@ const Schema = z.object({
     .max(6),
 });
 
-export async function fetchMarketSummary(): Promise<SummaryPayload> {
-  const search = await tvly.search(
-    "US stock market today: S&P 500, Nasdaq, Dow, Treasury yields, the Fed, oil, and crypto — top market-moving news",
-    { searchDepth: "basic", topic: "news", days: 3, maxResults: 8 },
-  );
+export async function fetchMarketSummary(market: Market = "us"): Promise<SummaryPayload> {
+  // The query + editorial focus switch with the market so India shows Indian market news.
+  const query =
+    market === "in"
+      ? "Indian stock market today: NIFTY 50, S&P BSE Sensex, Nifty Bank, the RBI, the rupee, top NSE and BSE movers — top market-moving news"
+      : "US stock market today: S&P 500, Nasdaq, Dow, Treasury yields, the Fed, oil, and crypto — top market-moving news";
+  const focus =
+    market === "in"
+      ? "(NIFTY 50 / Sensex / Nifty Bank, the RBI and rates, the rupee, big NSE/BSE movers, macro)"
+      : "(indices, the Fed/rates, big movers, crypto, macro/oil)";
+
+  const search = await tvly.search(query, { searchDepth: "basic", topic: "news", days: 3, maxResults: 8 });
   const results = search.results ?? [];
   const sources: SummarySource[] = results.map((r) => ({
     title: r.title,
@@ -55,8 +62,8 @@ export async function fetchMarketSummary(): Promise<SummaryPayload> {
     prompt:
       `You are a markets editor. From the dated news snippets below, write 5 concise "Market Summary" ` +
       `items (headline + 1-2 sentence body) covering the day's most important market-moving stories ` +
-      `(indices, the Fed/rates, big movers, crypto, macro/oil). Be factual and specific with numbers ` +
-      `where present. Do NOT invent anything not supported by the snippets.\n\n${context}`,
+      `${focus}. Be factual and specific with numbers where present. Do NOT invent anything not ` +
+      `supported by the snippets.\n\n${context}`,
   });
 
   return {

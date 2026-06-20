@@ -18,6 +18,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Sidebar } from "@/components/layout/sidebar";
 import { TopNav, type Section } from "@/components/layout/top-nav";
 import { FinanceView } from "@/components/finance/finance-view";
+import { AcademicView } from "@/components/discover/topic-discover-view";
 import { SearchHero } from "@/components/search-hero";
 import { ChatView, type ChatTab, type Turn } from "@/components/chat-view";
 import { DEFAULT_MODEL } from "@/components/model-menu";
@@ -38,15 +39,20 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<ChatTab>("answer");
   const [section, setSection] = useState<Section>("Discover");
 
-  // Async stream callbacks read the live conversation id / model without re-binding.
+  // Async stream callbacks read the live conversation id / model / section / turns
+  // without re-binding runTurn on every change.
   const convIdRef = useRef<string | null>(null);
   const modelRef = useRef<string>(model);
+  const sectionRef = useRef<Section>(section);
   useEffect(() => {
     convIdRef.current = conversationId;
   }, [conversationId]);
   useEffect(() => {
     modelRef.current = model;
   }, [model]);
+  useEffect(() => {
+    sectionRef.current = section;
+  }, [section]);
 
   // ── Auth guard ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -106,11 +112,15 @@ export default function Dashboard() {
         setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, full } : t)));
 
       try {
+        // Same chat, switched server-side: Finance tab → the tool-calling finance agent,
+        // everything else → the Discover web-search path. Streaming + persistence + history
+        // are shared, so finance threads save and replay like any other conversation.
+        const vertical = sectionRef.current === "Finance" ? "finance" : "discover";
         const existingId = convIdRef.current;
         const result =
           !fresh && existingId
-            ? await streamFollowUp(existingId, query, { onChunk, model: modelRef.current, attachments })
-            : await streamAsk(query, { onChunk, model: modelRef.current, attachments });
+            ? await streamFollowUp(existingId, query, { onChunk, model: modelRef.current, attachments, vertical })
+            : await streamAsk(query, { onChunk, model: modelRef.current, attachments, vertical });
 
         if (result.conversationId) {
           convIdRef.current = result.conversationId;
@@ -259,6 +269,8 @@ export default function Dashboard() {
         <ChatView turns={turns} activeTab={activeTab} onFollowUp={handleFollowUp} busy={busy} />
       ) : section === "Finance" ? (
         <FinanceView onAsk={handleAsk} />
+      ) : section === "Academic" ? (
+        <AcademicView onAsk={handleAsk} />
       ) : (
         <SearchHero onSubmit={handleAsk} model={model} onModelChange={setModel} />
       )}

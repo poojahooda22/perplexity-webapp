@@ -58,18 +58,26 @@ export interface Quote {
   changePercent: number | null;
   sparkline?: number[];
 }
+export type Market = "us" | "in";
 export interface QuotesPayload {
   items: Quote[];
   provenance: Provenance;
   needsKey?: boolean;
+  currency?: "USD" | "INR";
   fetchedAt?: number;
   stale?: boolean;
 }
 
 export const fetchCrypto = () => getJson<CryptoPayload>("/finance/crypto");
 export const fetchPredictions = () => getJson<PredictionsPayload>("/finance/predictions");
-export const fetchIndices = () => getJson<QuotesPayload>("/finance/indices");
-export const fetchStocks = () => getJson<QuotesPayload>("/finance/stocks");
+const marketQuery = (market: Market) => (market === "in" ? "?market=in" : "");
+export const fetchIndices = (market: Market = "us") =>
+  getJson<QuotesPayload>(`/finance/indices${marketQuery(market)}`);
+export const fetchStocks = (market: Market = "us") =>
+  getJson<QuotesPayload>(`/finance/stocks${marketQuery(market)}`);
+// fetchSectors is market-aware: US = SPDR sector ETFs, IN = NSE sectoral indices.
+export const fetchSectors = (market: Market = "us") =>
+  getJson<QuotesPayload>(`/finance/sectors${marketQuery(market)}`);
 
 export interface SummaryItem {
   headline: string;
@@ -87,7 +95,8 @@ export interface SummaryPayload {
   provenance: Provenance;
   stale?: boolean;
 }
-export const fetchMarketSummary = () => getJson<SummaryPayload>("/finance/summary");
+export const fetchMarketSummary = (market: Market = "us") =>
+  getJson<SummaryPayload>(`/finance/summary${marketQuery(market)}`);
 
 export interface ResearchSource {
   title: string;
@@ -124,4 +133,5 @@ export interface DiscoverPayload {
   needsKey?: boolean;
   stale?: boolean;
 }
-export const fetchDiscover = () => getJson<DiscoverPayload>("/finance/discover");
+export const fetchDiscover = (market: Market = "us") =>
+  getJson<DiscoverPayload>(`/finance/discover${marketQuery(market)}`);

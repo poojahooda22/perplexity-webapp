@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
-/** Perplexity-style 8-point asterisk mark. Uses currentColor so it themes automatically. */
-export function PerplexityMark({ className }: { className?: string }) {
+/** Lumina 8-point asterisk mark. Uses currentColor so it themes automatically. */
+export function LuminaMark({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -17,8 +17,8 @@ export function PerplexityMark({ className }: { className?: string }) {
   );
 }
 
-/** Lowercase wordmark, approximating the Perplexity hero logotype. */
-export function PerplexityWordmark({ className }: { className?: string }) {
+/** Lowercase Lumina hero wordmark. */
+export function LuminaWordmark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
@@ -26,7 +26,7 @@ export function PerplexityWordmark({ className }: { className?: string }) {
         className,
       )}
     >
-      perplexity
+      lumina
     </span>
   );
 }

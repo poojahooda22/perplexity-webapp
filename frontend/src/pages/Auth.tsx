@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { PerplexityMark } from "@/components/brand";
+import { LuminaMark } from "@/components/brand";
 
 type Provider = "google" | "github";
 
@@ -41,10 +41,10 @@ export default function Auth() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <div className="flex size-11 items-center justify-center rounded-xl border border-border bg-card text-foreground">
-            <PerplexityMark className="size-6" />
+            <LuminaMark className="size-6" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight">Welcome to Perplexity</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Welcome to Lumina</h1>
             <p className="text-sm text-muted-foreground">Sign in to start asking</p>
           </div>
         </div>

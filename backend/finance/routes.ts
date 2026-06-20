@@ -6,7 +6,7 @@
 import { Router, type RequestHandler } from "express";
 import { getOrRefresh } from "../lib/cache.js";
 import { financeRateLimit } from "../lib/ratelimit.js";
-import { fetchCrypto, fetchPredictions, fetchIndices, fetchStocks } from "./sources.js";
+import { fetchCrypto, fetchPredictions, fetchIndices, fetchStocks, fetchSectors, type Market } from "./sources.js";
 import { fetchMarketSummary } from "./summary.js";
 import { fetchAllResearch } from "./research.js";
 import { fetchDiscover } from "./news.js";
@@ -15,15 +15,15 @@ export const financeRouter = Router();
 
 // Cache TTLs (seconds). Crypto/predictions move fast; stocks/indices we refresh gently to
 // stay well under Twelve Data's free 800-calls/day + 8/min limits.
-const TTL = { crypto: 30, predictions: 120, indices: 300, stocks: 300, summary: 900, research: 21_600, discover: 600 };
+const TTL = { crypto: 30, predictions: 120, indices: 300, stocks: 300, sectors: 300, summary: 900, research: 21_600, discover: 600 };
+// Only keys read by readRoute (crypto/predictions/research) or /home (indices/stocks). The
+// market-aware routes (sectors/summary/discover) build their keys inline in marketReadRoute.
 const CACHE_KEYS = {
   crypto: "finance:crypto",
   predictions: "finance:predictions",
   indices: "finance:indices",
   stocks: "finance:stocks",
-  summary: "finance:summary",
   research: "finance:research",
-  discover: "finance:discover",
 };
 
 // A cached read handler: serve fresh-or-stale from cache, 502 only if there's nothing.
@@ -39,16 +39,39 @@ function readRoute(key: string, ttl: number, fetcher: () => Promise<unknown>): R
   };
 }
 
+// Market-aware cached read: ?market=in serves the India series from a SEPARATE cache key
+// (finance:in:<name>); default/US keeps the existing finance:<name> key untouched.
+function marketReadRoute(
+  name: string,
+  ttl: number,
+  fetcher: (m: Market) => Promise<unknown>,
+): RequestHandler {
+  return async (req, res) => {
+    const market: Market = req.query.market === "in" ? "in" : "us";
+    const key = market === "in" ? `finance:in:${name}` : `finance:${name}`;
+    try {
+      const r = await getOrRefresh(key, ttl, () => fetcher(market));
+      res.json({ ...(r.data as object), fetchedAt: r.fetchedAt, stale: r.stale });
+    } catch (e) {
+      console.error(`[finance] ${key} failed:`, e instanceof Error ? e.message : e);
+      res.status(502).json({ error: `${key} upstream failed` });
+    }
+  };
+}
+
 financeRouter.get("/crypto", financeRateLimit, readRoute(CACHE_KEYS.crypto, TTL.crypto, fetchCrypto));
 financeRouter.get("/predictions", financeRateLimit, readRoute(CACHE_KEYS.predictions, TTL.predictions, fetchPredictions));
-financeRouter.get("/indices", financeRateLimit, readRoute(CACHE_KEYS.indices, TTL.indices, fetchIndices));
-financeRouter.get("/stocks", financeRateLimit, readRoute(CACHE_KEYS.stocks, TTL.stocks, fetchStocks));
+// Indices + stocks are market-aware (US default, ?market=in for India).
+financeRouter.get("/indices", financeRateLimit, marketReadRoute("indices", TTL.indices, fetchIndices));
+financeRouter.get("/stocks", financeRateLimit, marketReadRoute("stocks", TTL.stocks, fetchStocks));
+// Equity sectors — US: 11 SPDR Select Sector ETFs; India (?market=in): NSE sectoral indices.
+financeRouter.get("/sectors", financeRateLimit, marketReadRoute("sectors", TTL.sectors, fetchSectors));
 // Market Summary is LLM-backed → long TTL so it generates only ~once per window.
-financeRouter.get("/summary", financeRateLimit, readRoute(CACHE_KEYS.summary, TTL.summary, fetchMarketSummary));
+financeRouter.get("/summary", financeRateLimit, marketReadRoute("summary", TTL.summary, fetchMarketSummary));
 // Global Research is LLM-backed + multi-category → 6h TTL (analytical content changes slowly).
 financeRouter.get("/research", financeRateLimit, readRoute(CACHE_KEYS.research, TTL.research, fetchAllResearch));
-// Discover financial-news carousel (Finnhub /news, headline+link+image only).
-financeRouter.get("/discover", financeRateLimit, readRoute(CACHE_KEYS.discover, TTL.discover, fetchDiscover));
+// Discover news carousel — US: Finnhub /news; India (?market=in): Tavily India-publisher search.
+financeRouter.get("/discover", financeRateLimit, marketReadRoute("discover", TTL.discover, fetchDiscover));
 
 // Aggregate landing payload — one request powers the whole Finance home.
 financeRouter.get("/home", financeRateLimit, async (_req, res) => {
@@ -81,8 +104,17 @@ financeRouter.post("/cron/refresh", async (req, res) => {
   const jobs: [string, () => Promise<unknown>][] = [
     ["indices", fetchIndices],
     ["stocks", fetchStocks],
+    ["sectors", fetchSectors],
     ["crypto", fetchCrypto],
     ["predictions", fetchPredictions],
+    // LLM+Tavily-backed summaries — warm them so the first user after a TTL lapse doesn't pay
+    // the cold generation cost (they're otherwise never pre-warmed).
+    ["summary", () => fetchMarketSummary("us")],
+    // India market (separate finance:in:* keys, matching marketReadRoute).
+    ["in:indices", () => fetchIndices("in")],
+    ["in:stocks", () => fetchStocks("in")],
+    ["in:sectors", () => fetchSectors("in")],
+    ["in:summary", () => fetchMarketSummary("in")],
   ];
   const results = await Promise.allSettled(jobs.map(([key, fn]) => getOrRefresh(`finance:${key}`, 0, fn)));
   res.json({ refreshed: jobs.map(([key], i) => ({ key, ok: results[i]!.status === "fulfilled" })) });

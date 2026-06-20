@@ -7,7 +7,9 @@ import {
   fetchMarketSummary,
   fetchPredictions,
   fetchResearch,
+  fetchSectors,
   fetchStocks,
+  type Market,
 } from "@/lib/finance-api";
 
 // refetchInterval is aligned to the backend cache TTLs (crypto 30s, predictions 120s)
@@ -22,16 +24,31 @@ export const usePredictions = () =>
     refetchInterval: 120_000,
   });
 
-export const useIndices = () =>
-  useQuery({ queryKey: ["finance", "indices"], queryFn: fetchIndices, refetchInterval: 60_000 });
-
-export const useStocks = () =>
-  useQuery({ queryKey: ["finance", "stocks"], queryFn: fetchStocks, refetchInterval: 60_000 });
-
-export const useMarketSummary = () =>
+export const useIndices = (market: Market = "us") =>
   useQuery({
-    queryKey: ["finance", "summary"],
-    queryFn: fetchMarketSummary,
+    queryKey: ["finance", "indices", market],
+    queryFn: () => fetchIndices(market),
+    refetchInterval: 60_000,
+  });
+
+export const useStocks = (market: Market = "us") =>
+  useQuery({
+    queryKey: ["finance", "stocks", market],
+    queryFn: () => fetchStocks(market),
+    refetchInterval: 60_000,
+  });
+
+export const useSectors = (market: Market = "us") =>
+  useQuery({
+    queryKey: ["finance", "sectors", market],
+    queryFn: () => fetchSectors(market),
+    refetchInterval: 300_000,
+  });
+
+export const useMarketSummary = (market: Market = "us") =>
+  useQuery({
+    queryKey: ["finance", "summary", market],
+    queryFn: () => fetchMarketSummary(market),
     refetchInterval: 600_000, // 10 min; backend caches 15 min
   });
 
@@ -42,9 +59,9 @@ export const useResearch = () =>
     refetchInterval: 1_800_000, // 30 min; backend caches 6h
   });
 
-export const useDiscover = () =>
+export const useDiscover = (market: Market = "us") =>
   useQuery({
-    queryKey: ["finance", "discover"],
-    queryFn: fetchDiscover,
+    queryKey: ["finance", "discover", market],
+    queryFn: () => fetchDiscover(market),
     refetchInterval: 300_000, // 5 min; backend caches 10 min
   });
