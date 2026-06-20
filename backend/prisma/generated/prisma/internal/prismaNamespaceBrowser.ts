@@ -54,7 +54,8 @@ export const ModelName = {
   User: 'User',
   Conversation: 'Conversation',
   CachedQuery: 'CachedQuery',
-  Message: 'Message'
+  Message: 'Message',
+  GmailConnection: 'GmailConnection'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -119,6 +120,21 @@ export const MessageScalarFieldEnum = {
 } as const
 
 export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeof MessageScalarFieldEnum]
+
+
+export const GmailConnectionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  googleEmail: 'googleEmail',
+  refreshTokenEnc: 'refreshTokenEnc',
+  iv: 'iv',
+  authTag: 'authTag',
+  scopes: 'scopes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GmailConnectionScalarFieldEnum = (typeof GmailConnectionScalarFieldEnum)[keyof typeof GmailConnectionScalarFieldEnum]
 
 
 export const SortOrder = {

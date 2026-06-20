@@ -1,10 +1,12 @@
 import type { User } from "@supabase/supabase-js";
+import { useNavigate } from "react-router";
 import {
   Check,
   ChevronsUpDown,
   CreditCard,
   LogOut,
   Moon,
+  Plug,
   Settings,
   Sun,
   User as UserIcon,
@@ -39,6 +41,7 @@ export function ProfileMenu({
   collapsed?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
 
   const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
   const email = user.email ?? "";
@@ -94,6 +97,10 @@ export function ProfileMenu({
         <DropdownMenuItem>
           <Settings />
           Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => navigate("/connectors")}>
+          <Plug />
+          Connectors
         </DropdownMenuItem>
         <DropdownMenuItem>
           <CreditCard />

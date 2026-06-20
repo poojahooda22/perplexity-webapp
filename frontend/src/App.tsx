@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { queryClient } from "@/lib/query";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import Connectors from "./pages/Connectors";
 
 export function App() {
   return (
@@ -14,6 +15,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/connectors" element={<Connectors />} />
           </Routes>
         </BrowserRouter>
       </QueryClientProvider>

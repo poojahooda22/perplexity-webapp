@@ -37,3 +37,8 @@ export type CachedQuery = Prisma.CachedQueryModel
  * 
  */
 export type Message = Prisma.MessageModel
+/**
+ * Model GmailConnection
+ * 
+ */
+export type GmailConnection = Prisma.GmailConnectionModel

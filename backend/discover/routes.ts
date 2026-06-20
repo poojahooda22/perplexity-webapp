@@ -8,12 +8,13 @@ import { Router, type RequestHandler } from "express";
 import { getOrRefresh } from "../lib/cache.js";
 import { financeRateLimit } from "../lib/ratelimit.js";
 import { fetchAcademicDiscover } from "./academic.js";
+import { fetchHealthDiscover } from "./health.js";
 import type { Market } from "./shared.js";
 
 export const discoverRouter = Router();
 
-// Academic content changes slowly → a long-ish TTL; the cron warmer keeps it hot regardless.
-const TTL = { academic: 1800 };
+// Academic changes slowly; health news moves faster (10-min). The cron warmer keeps both hot.
+const TTL = { academic: 1800, health: 600 };
 
 // Market-aware cached read: ?market=in serves the India series from a SEPARATE cache key
 // (discover:in:<topic>); default/US uses discover:<topic>. Mirrors finance's marketReadRoute.
@@ -36,6 +37,7 @@ function discoverRoute(
 }
 
 discoverRouter.get("/academic", financeRateLimit, discoverRoute("academic", TTL.academic, fetchAcademicDiscover));
+discoverRouter.get("/health", financeRateLimit, discoverRoute("health", TTL.health, fetchHealthDiscover));
 
 // Cron warmer — force-refresh every series so reads stay hot (wire cron-job.org to POST here
 // with CRON_SECRET; the guard is skipped if it's unset). Mirrors finance's /cron/refresh.
@@ -50,6 +52,8 @@ discoverRouter.post("/cron/refresh", async (req, res) => {
   const jobs: [string, () => Promise<unknown>][] = [
     ["academic", () => fetchAcademicDiscover("us")],
     ["in:academic", () => fetchAcademicDiscover("in")],
+    ["health", () => fetchHealthDiscover("us")],
+    ["in:health", () => fetchHealthDiscover("in")],
   ];
   const results = await Promise.allSettled(jobs.map(([key, fn]) => getOrRefresh(`discover:${key}`, 0, fn)));
   res.json({ refreshed: jobs.map(([key], i) => ({ key, ok: results[i]!.status === "fulfilled" })) });

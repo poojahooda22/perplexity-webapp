@@ -199,6 +199,7 @@ export type UserWhereInput = {
   provider?: Prisma.EnumAuthProviderFilter<"User"> | $Enums.AuthProvider
   supabaseId?: Prisma.StringFilter<"User"> | string
   conversations?: Prisma.ConversationListRelationFilter
+  gmailConnection?: Prisma.XOR<Prisma.GmailConnectionNullableScalarRelationFilter, Prisma.GmailConnectionWhereInput> | null
 }
 
 export type UserOrderByWithRelationInput = {
@@ -210,6 +211,7 @@ export type UserOrderByWithRelationInput = {
   provider?: Prisma.SortOrder
   supabaseId?: Prisma.SortOrder
   conversations?: Prisma.ConversationOrderByRelationAggregateInput
+  gmailConnection?: Prisma.GmailConnectionOrderByWithRelationInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -224,6 +226,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   provider?: Prisma.EnumAuthProviderFilter<"User"> | $Enums.AuthProvider
   supabaseId?: Prisma.StringFilter<"User"> | string
   conversations?: Prisma.ConversationListRelationFilter
+  gmailConnection?: Prisma.XOR<Prisma.GmailConnectionNullableScalarRelationFilter, Prisma.GmailConnectionWhereInput> | null
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -261,6 +264,7 @@ export type UserCreateInput = {
   provider: $Enums.AuthProvider
   supabaseId: string
   conversations?: Prisma.ConversationCreateNestedManyWithoutUserInput
+  gmailConnection?: Prisma.GmailConnectionCreateNestedOneWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -272,6 +276,7 @@ export type UserUncheckedCreateInput = {
   provider: $Enums.AuthProvider
   supabaseId: string
   conversations?: Prisma.ConversationUncheckedCreateNestedManyWithoutUserInput
+  gmailConnection?: Prisma.GmailConnectionUncheckedCreateNestedOneWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -283,6 +288,7 @@ export type UserUpdateInput = {
   provider?: Prisma.EnumAuthProviderFieldUpdateOperationsInput | $Enums.AuthProvider
   supabaseId?: Prisma.StringFieldUpdateOperationsInput | string
   conversations?: Prisma.ConversationUpdateManyWithoutUserNestedInput
+  gmailConnection?: Prisma.GmailConnectionUpdateOneWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -294,6 +300,7 @@ export type UserUncheckedUpdateInput = {
   provider?: Prisma.EnumAuthProviderFieldUpdateOperationsInput | $Enums.AuthProvider
   supabaseId?: Prisma.StringFieldUpdateOperationsInput | string
   conversations?: Prisma.ConversationUncheckedUpdateManyWithoutUserNestedInput
+  gmailConnection?: Prisma.GmailConnectionUncheckedUpdateOneWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -387,6 +394,20 @@ export type UserUpdateOneRequiredWithoutConversationsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutConversationsInput, Prisma.UserUpdateWithoutConversationsInput>, Prisma.UserUncheckedUpdateWithoutConversationsInput>
 }
 
+export type UserCreateNestedOneWithoutGmailConnectionInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutGmailConnectionInput, Prisma.UserUncheckedCreateWithoutGmailConnectionInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutGmailConnectionInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutGmailConnectionNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutGmailConnectionInput, Prisma.UserUncheckedCreateWithoutGmailConnectionInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutGmailConnectionInput
+  upsert?: Prisma.UserUpsertWithoutGmailConnectionInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutGmailConnectionInput, Prisma.UserUpdateWithoutGmailConnectionInput>, Prisma.UserUncheckedUpdateWithoutGmailConnectionInput>
+}
+
 export type UserCreateWithoutConversationsInput = {
   id?: string
   email: string
@@ -395,6 +416,7 @@ export type UserCreateWithoutConversationsInput = {
   updatedAt?: Date | string
   provider: $Enums.AuthProvider
   supabaseId: string
+  gmailConnection?: Prisma.GmailConnectionCreateNestedOneWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutConversationsInput = {
@@ -405,6 +427,7 @@ export type UserUncheckedCreateWithoutConversationsInput = {
   updatedAt?: Date | string
   provider: $Enums.AuthProvider
   supabaseId: string
+  gmailConnection?: Prisma.GmailConnectionUncheckedCreateNestedOneWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutConversationsInput = {
@@ -431,6 +454,7 @@ export type UserUpdateWithoutConversationsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   provider?: Prisma.EnumAuthProviderFieldUpdateOperationsInput | $Enums.AuthProvider
   supabaseId?: Prisma.StringFieldUpdateOperationsInput | string
+  gmailConnection?: Prisma.GmailConnectionUpdateOneWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutConversationsInput = {
@@ -441,6 +465,67 @@ export type UserUncheckedUpdateWithoutConversationsInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   provider?: Prisma.EnumAuthProviderFieldUpdateOperationsInput | $Enums.AuthProvider
   supabaseId?: Prisma.StringFieldUpdateOperationsInput | string
+  gmailConnection?: Prisma.GmailConnectionUncheckedUpdateOneWithoutUserNestedInput
+}
+
+export type UserCreateWithoutGmailConnectionInput = {
+  id?: string
+  email: string
+  name: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  provider: $Enums.AuthProvider
+  supabaseId: string
+  conversations?: Prisma.ConversationCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutGmailConnectionInput = {
+  id?: string
+  email: string
+  name: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  provider: $Enums.AuthProvider
+  supabaseId: string
+  conversations?: Prisma.ConversationUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutGmailConnectionInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutGmailConnectionInput, Prisma.UserUncheckedCreateWithoutGmailConnectionInput>
+}
+
+export type UserUpsertWithoutGmailConnectionInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutGmailConnectionInput, Prisma.UserUncheckedUpdateWithoutGmailConnectionInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutGmailConnectionInput, Prisma.UserUncheckedCreateWithoutGmailConnectionInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutGmailConnectionInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutGmailConnectionInput, Prisma.UserUncheckedUpdateWithoutGmailConnectionInput>
+}
+
+export type UserUpdateWithoutGmailConnectionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  provider?: Prisma.EnumAuthProviderFieldUpdateOperationsInput | $Enums.AuthProvider
+  supabaseId?: Prisma.StringFieldUpdateOperationsInput | string
+  conversations?: Prisma.ConversationUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutGmailConnectionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  provider?: Prisma.EnumAuthProviderFieldUpdateOperationsInput | $Enums.AuthProvider
+  supabaseId?: Prisma.StringFieldUpdateOperationsInput | string
+  conversations?: Prisma.ConversationUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -483,6 +568,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   provider?: boolean
   supabaseId?: boolean
   conversations?: boolean | Prisma.User$conversationsArgs<ExtArgs>
+  gmailConnection?: boolean | Prisma.User$gmailConnectionArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -519,6 +605,7 @@ export type UserSelectScalar = {
 export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "createdAt" | "updatedAt" | "provider" | "supabaseId", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   conversations?: boolean | Prisma.User$conversationsArgs<ExtArgs>
+  gmailConnection?: boolean | Prisma.User$gmailConnectionArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -528,6 +615,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name: "User"
   objects: {
     conversations: Prisma.$ConversationPayload<ExtArgs>[]
+    gmailConnection: Prisma.$GmailConnectionPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -932,6 +1020,7 @@ readonly fields: UserFieldRefs;
 export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   conversations<T extends Prisma.User$conversationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$conversationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ConversationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  gmailConnection<T extends Prisma.User$gmailConnectionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$gmailConnectionArgs<ExtArgs>>): Prisma.Prisma__GmailConnectionClient<runtime.Types.Result.GetResult<Prisma.$GmailConnectionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1382,6 +1471,25 @@ export type User$conversationsArgs<ExtArgs extends runtime.Types.Extensions.Inte
   take?: number
   skip?: number
   distinct?: Prisma.ConversationScalarFieldEnum | Prisma.ConversationScalarFieldEnum[]
+}
+
+/**
+ * User.gmailConnection
+ */
+export type User$gmailConnectionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the GmailConnection
+   */
+  select?: Prisma.GmailConnectionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the GmailConnection
+   */
+  omit?: Prisma.GmailConnectionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.GmailConnectionInclude<ExtArgs> | null
+  where?: Prisma.GmailConnectionWhereInput
 }
 
 /**

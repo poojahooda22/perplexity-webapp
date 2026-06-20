@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 
 import { parseStream, type Attachment, type ImageResult, type Source } from "@/lib/api";
 import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/attachments";
+import { MicButton } from "@/components/mic-button";
 import { cn } from "@/lib/utils";
 
 export type ChatTab = "answer" | "links" | "images";
@@ -147,6 +148,7 @@ export function ChatView({
               placeholder="Ask a follow-up…"
               className="block field-sizing-content max-h-[30vh] min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
             />
+            <MicButton className="mb-0.5" />
             <button
               type="submit"
               aria-label="Send follow-up"

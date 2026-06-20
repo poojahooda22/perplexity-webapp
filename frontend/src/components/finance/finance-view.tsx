@@ -472,7 +472,21 @@ function CryptoCard({ coin }: { coin: CryptoCoin }) {
 }
 
 function PredictionCard({ market, unit }: { market: PredictionMarket; unit?: string }) {
-  const outcomes = [...market.outcomes].sort((a, b) => b.probability - a.probability).slice(0, 4);
+  // Consistent order: "Yes" always on top, "No" always at the bottom (any other outcomes,
+  // by probability, in between). Bars colored by outcome: Yes = green, No = red.
+  const rank = (label: string) => {
+    const l = label.trim().toLowerCase();
+    return l === "yes" ? 0 : l === "no" ? 2 : 1;
+  };
+  const outcomeColor = (label: string) => {
+    const l = label.trim().toLowerCase();
+    if (l === "yes") return { bar: "bg-emerald-500", text: "text-emerald-500" };
+    if (l === "no") return { bar: "bg-rose-500/70", text: "text-rose-500" };
+    return { bar: "bg-primary/70", text: "text-foreground" };
+  };
+  const outcomes = [...market.outcomes]
+    .sort((a, b) => rank(a.label) - rank(b.label) || b.probability - a.probability)
+    .slice(0, 4);
   const volSymbol = unit === "mana" ? "Ṁ" : "$";
   return (
     <a
@@ -490,14 +504,15 @@ function PredictionCard({ market, unit }: { market: PredictionMarket; unit?: str
       <div className="mt-3 space-y-1.5">
         {outcomes.map((o, i) => {
           const p = Math.round(o.probability * 100);
+          const c = outcomeColor(o.label);
           return (
             <div key={`${market.id}-${i}`} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="truncate text-foreground/80">{o.label}</span>
-                <span className="font-semibold text-foreground">{p}%</span>
+                <span className={cn("font-semibold", c.text)}>{p}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full rounded-full bg-primary/70" style={{ width: `${p}%` }} />
+                <div className={cn("h-full rounded-full", c.bar)} style={{ width: `${p}%` }} />
               </div>
             </div>
           );

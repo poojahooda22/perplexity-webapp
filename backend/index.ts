@@ -12,6 +12,7 @@ import { financeRouter } from './finance/routes.js';
 import { buildFinanceTools } from './finance/tools.js';
 import { buildFinanceSystem } from './finance/skills.js';
 import { discoverRouter } from './discover/routes.js';
+import { gmailRouter } from './connectors/gmail/routes.js';
 
 const app = express();
 
@@ -53,6 +54,11 @@ app.use("/finance", financeRouter);
 
 // Discover tabs (health / academic) — public, cached card feeds, same pattern as finance.
 app.use("/discover", discoverRouter);
+
+// Connectors — per-user Gmail OAuth + send. Mixed auth: the router applies `middleware` per
+// route because /connectors/gmail/callback must stay PUBLIC (Google's browser redirect carries
+// no auth header; identity rides in the encrypted OAuth `state`).
+app.use("/connectors/gmail", gmailRouter);
 
 // Vercel AI Gateway model ids (`<provider>/<model>`, dot in the model segment).
 // A bare string model routes through the gateway (uses AI_GATEWAY_API_KEY), giving

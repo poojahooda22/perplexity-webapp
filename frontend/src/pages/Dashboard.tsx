@@ -19,6 +19,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { TopNav, type Section } from "@/components/layout/top-nav";
 import { FinanceView } from "@/components/finance/finance-view";
 import { AcademicView } from "@/components/discover/topic-discover-view";
+import { HealthView } from "@/components/discover/health-view";
 import { SearchHero } from "@/components/search-hero";
 import { ChatView, type ChatTab, type Turn } from "@/components/chat-view";
 import { DEFAULT_MODEL } from "@/components/model-menu";
@@ -271,6 +272,8 @@ export default function Dashboard() {
         <FinanceView onAsk={handleAsk} />
       ) : section === "Academic" ? (
         <AcademicView onAsk={handleAsk} />
+      ) : section === "Health" ? (
+        <HealthView onAsk={handleAsk} />
       ) : (
         <SearchHero onSubmit={handleAsk} model={model} onModelChange={setModel} />
       )}

@@ -387,7 +387,8 @@ export const ModelName = {
   User: 'User',
   Conversation: 'Conversation',
   CachedQuery: 'CachedQuery',
-  Message: 'Message'
+  Message: 'Message',
+  GmailConnection: 'GmailConnection'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -403,7 +404,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "conversation" | "cachedQuery" | "message"
+    modelProps: "user" | "conversation" | "cachedQuery" | "message" | "gmailConnection"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -687,6 +688,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    GmailConnection: {
+      payload: Prisma.$GmailConnectionPayload<ExtArgs>
+      fields: Prisma.GmailConnectionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.GmailConnectionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.GmailConnectionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>
+        }
+        findFirst: {
+          args: Prisma.GmailConnectionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.GmailConnectionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>
+        }
+        findMany: {
+          args: Prisma.GmailConnectionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>[]
+        }
+        create: {
+          args: Prisma.GmailConnectionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>
+        }
+        createMany: {
+          args: Prisma.GmailConnectionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.GmailConnectionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>[]
+        }
+        delete: {
+          args: Prisma.GmailConnectionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>
+        }
+        update: {
+          args: Prisma.GmailConnectionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>
+        }
+        deleteMany: {
+          args: Prisma.GmailConnectionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.GmailConnectionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.GmailConnectionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>[]
+        }
+        upsert: {
+          args: Prisma.GmailConnectionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$GmailConnectionPayload>
+        }
+        aggregate: {
+          args: Prisma.GmailConnectionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateGmailConnection>
+        }
+        groupBy: {
+          args: Prisma.GmailConnectionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GmailConnectionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.GmailConnectionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.GmailConnectionCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -772,6 +847,21 @@ export const MessageScalarFieldEnum = {
 } as const
 
 export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeof MessageScalarFieldEnum]
+
+
+export const GmailConnectionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  googleEmail: 'googleEmail',
+  refreshTokenEnc: 'refreshTokenEnc',
+  iv: 'iv',
+  authTag: 'authTag',
+  scopes: 'scopes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type GmailConnectionScalarFieldEnum = (typeof GmailConnectionScalarFieldEnum)[keyof typeof GmailConnectionScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1031,6 +1121,7 @@ export type GlobalOmitConfig = {
   conversation?: Prisma.ConversationOmit
   cachedQuery?: Prisma.CachedQueryOmit
   message?: Prisma.MessageOmit
+  gmailConnection?: Prisma.GmailConnectionOmit
 }
 
 /* Types for Logging */

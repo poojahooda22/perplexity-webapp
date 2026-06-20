@@ -32,7 +32,8 @@ model User {
   updatedAt  DateTime    @updatedAt  
   provider    AuthProvider
   supabaseId  String
-  conversations Conversation[] 
+  conversations Conversation[]
+  gmailConnection GmailConnection?
 
 }
 
@@ -75,6 +76,27 @@ model Message {
   conversationId String
   createdId      DateTime           @default(now())
   
+}
+
+// Per-user Gmail connection (the "Connectors" feature). One OAuth grant per user.
+// The refresh token is stored ENCRYPTED (AES-256-GCM): `refreshTokenEnc` is the ciphertext,
+// with its own unique `iv` (12-byte GCM nonce) and `authTag`. The AES key lives in env
+// (GMAIL_TOKEN_ENC_KEY), NEVER in the DB — so a database leak alone can't read the tokens.
+// Short-lived access tokens (~1h) are NOT stored; we mint them on demand from the refresh token.
+model GmailConnection {
+  id              String   @id @default(uuid())
+  userId          String   @unique                       // Supabase user id — one connection per user
+  googleEmail     String   @map("google_email")          // the connected Gmail address (display + sanity check)
+  refreshTokenEnc String   @map("refresh_token_enc")      // AES-256-GCM ciphertext (base64)
+  iv              String                                  // GCM nonce (base64), unique per encryption
+  authTag         String   @map("auth_tag")               // GCM auth tag (base64)
+  scopes          String                                  // space-delimited granted scopes
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gmail_connection")
 }
 
 enum MessageRole {

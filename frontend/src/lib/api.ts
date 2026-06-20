@@ -205,3 +205,69 @@ export function parseStream(full: string): ParsedAnswer {
 
   return { answer, followUps, sources, images };
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Connectors — Gmail (per-user OAuth + send). All authenticated like the rest.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export interface GmailStatus {
+  connected: boolean;
+  googleEmail?: string;
+  scopes?: string;
+  connectedAt?: string;
+}
+
+/** Whether the user has connected Gmail (and which address). */
+export async function gmailStatus(): Promise<GmailStatus> {
+  const token = await authHeader();
+  const res = await fetch(`${BACKEND_URL}/connectors/gmail/status`, {
+    headers: { Authorization: token },
+  });
+  if (!res.ok) throw new Error(`Gmail status failed (${res.status})`);
+  return (await res.json()) as GmailStatus;
+}
+
+/**
+ * Ask the backend for the Google consent URL. We fetch it (so the auth header rides along)
+ * and the caller navigates the browser to it — a server 302 would lose the header on the hop.
+ */
+export async function gmailStartUrl(): Promise<string> {
+  const token = await authHeader();
+  const res = await fetch(`${BACKEND_URL}/connectors/gmail/start`, {
+    headers: { Authorization: token },
+  });
+  if (!res.ok) throw new Error(`Could not start Gmail connect (${res.status})`);
+  const data = (await res.json()) as { url: string };
+  return data.url;
+}
+
+export interface GmailSendInput {
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string;
+  bcc?: string;
+}
+
+/** Send an email via the connected Gmail account. Returns Gmail's message + thread ids. */
+export async function gmailSend(input: GmailSendInput): Promise<{ id: string; threadId: string }> {
+  const token = await authHeader();
+  const res = await fetch(`${BACKEND_URL}/connectors/gmail/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: token },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string; id?: string; threadId?: string };
+  if (!res.ok) throw new Error(data.error || `Send failed (${res.status})`);
+  return { id: data.id ?? "", threadId: data.threadId ?? "" };
+}
+
+/** Disconnect Gmail — deletes the stored token and revokes it at Google. */
+export async function gmailDisconnect(): Promise<void> {
+  const token = await authHeader();
+  const res = await fetch(`${BACKEND_URL}/connectors/gmail`, {
+    method: "DELETE",
+    headers: { Authorization: token },
+  });
+  if (!res.ok) throw new Error(`Disconnect failed (${res.status})`);
+}

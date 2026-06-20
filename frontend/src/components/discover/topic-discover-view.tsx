@@ -1,109 +1,13 @@
 import { useState } from "react";
-import { ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowUp, Search } from "lucide-react";
 
 import type { Attachment } from "@/lib/api";
+import { MicButton } from "@/components/mic-button";
+import { Carousel, CategoryCard, wiki, type Category } from "@/components/discover/discover-parts";
 
 // The Academic home: a search box (runs the normal web-search answer flow, like Discover) and
 // two category carousels — "Trending Topics" and "Research Papers". Every card fires a generated
 // search via onAsk (papers are a library — you browse by category, not a flat paper dump).
-
-/* ── Reusable arrows + center-dots carousel (matches the Discover carousel) ── */
-function CarouselButton({
-  onClick,
-  disabled,
-  label,
-  children,
-}: {
-  onClick: () => void;
-  disabled: boolean;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className="inline-flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      {children}
-    </button>
-  );
-}
-
-function Carousel<T>({
-  items,
-  perPage,
-  render,
-}: {
-  items: T[];
-  perPage: number;
-  render: (item: T) => React.ReactNode;
-}) {
-  const [page, setPage] = useState(0);
-  const pages = Math.max(1, Math.ceil(items.length / perPage));
-  const safePage = Math.min(page, pages - 1);
-  const visible = items.slice(safePage * perPage, safePage * perPage + perPage);
-
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {visible.map(render)}
-      </div>
-      {pages > 1 && (
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <CarouselButton onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} label="Previous">
-            <ChevronLeft className="size-4" />
-          </CarouselButton>
-          <div className="flex items-center gap-1.5">
-            {Array.from({ length: pages }).map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setPage(i)}
-                aria-label={`Page ${i + 1}`}
-                className={
-                  "h-1.5 rounded-full transition-all " +
-                  (i === safePage ? "w-4 bg-foreground/70" : "w-1.5 bg-muted-foreground/40 hover:bg-muted-foreground/70")
-                }
-              />
-            ))}
-          </div>
-          <CarouselButton onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={safePage === pages - 1} label="Next">
-            <ChevronRight className="size-4" />
-          </CarouselButton>
-        </div>
-      )}
-    </div>
-  );
-}
-
-type Category = { label: string; image: string };
-
-// Public-domain artwork (Wikimedia, verified-stable) — creative, free, themed per category.
-const wiki = (file: string) => `https://commons.wikimedia.org/wiki/Special:FilePath/${file}?width=1000`;
-
-function CategoryCard({ item, onClick }: { item: Category; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group relative block h-44 overflow-hidden rounded-2xl text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      <img
-        src={item.image}
-        alt=""
-        loading="lazy"
-        className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-105"
-      />
-      <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
-      <span className="absolute bottom-3 left-4 right-4 text-base font-semibold leading-tight text-white drop-shadow-sm">
-        {item.label}
-      </span>
-    </button>
-  );
-}
 
 // Trending Topics — broad areas (classical paintings).
 const TRENDING: Category[] = [
@@ -173,7 +77,8 @@ export function AcademicView({
             placeholder="Explore academic papers, journals, and more"
             className="block field-sizing-content max-h-[30vh] min-h-[28px] w-full resize-none overflow-y-auto bg-transparent px-5 pt-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
-          <div className="flex items-center justify-end px-3 pb-3 pt-2">
+          <div className="flex items-center justify-end gap-1.5 px-3 pb-3 pt-2">
+            <MicButton />
             <button
               type="submit"
               aria-label="Search"

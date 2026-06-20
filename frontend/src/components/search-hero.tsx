@@ -4,6 +4,7 @@ import { ArrowUp, Briefcase, FileText, Map as MapIcon, Presentation } from "luci
 
 import { LuminaWordmark } from "@/components/brand";
 import { ModelMenu } from "@/components/model-menu";
+import { MicButton } from "@/components/mic-button";
 import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/attachments";
 import type { Attachment } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,7 @@ export function SearchHero({
 
           <div className="flex items-center gap-1.5">
             <ModelMenu value={model} onChange={onModelChange} />
+            <MicButton />
             <button
               type="submit"
               aria-label="Submit"
