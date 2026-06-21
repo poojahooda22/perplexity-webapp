@@ -99,7 +99,7 @@ export default function Dashboard() {
     if (!user) return;
     setLoadingConversations(true);
     refreshConversations();
-  }, [user, refreshConversations]);
+  }, []);
 
   // ── Ask / follow-up ───────────────────────────────────────────────────────
   const runTurn = useCallback(
@@ -116,7 +116,12 @@ export default function Dashboard() {
         // Same chat, switched server-side: Finance tab → the tool-calling finance agent,
         // everything else → the Discover web-search path. Streaming + persistence + history
         // are shared, so finance threads save and replay like any other conversation.
-        const vertical = sectionRef.current === "Finance" ? "finance" : "discover";
+        const vertical =
+          sectionRef.current === "Finance"
+            ? "finance"
+            : sectionRef.current === "Assistant"
+              ? "assistant"
+              : "discover";
         const existingId = convIdRef.current;
         const result =
           !fresh && existingId

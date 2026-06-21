@@ -20,7 +20,12 @@ const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 
-export const GMAIL_SCOPES = ["openid", "email", "https://www.googleapis.com/auth/gmail.send"];
+export const GMAIL_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/gmail.send", // send-only (sensitive)
+  "https://www.googleapis.com/auth/gmail.readonly", // read inbox/messages (restricted)
+];
 const STATE_TTL_MS = 10 * 60 * 1000; // a consent screen left open longer than this must restart
 
 function clientId(): string {

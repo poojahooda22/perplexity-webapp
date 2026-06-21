@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ComponentType } from "react";
+import { useNavigate } from "react-router";
 import type { User } from "@supabase/supabase-js";
 import {
   Bell,
@@ -50,6 +51,11 @@ const SECONDARY_NAV: NavEntry[] = [
   { id: "skills", label: "Skills", icon: Sparkles },
   { id: "workflows", label: "Workflows", icon: Workflow },
 ];
+
+// Routes wired so far. Items without an entry are placeholders (no-op until they ship).
+const NAV_PATHS: Record<string, string> = {
+  connectors: "/connectors",
+};
 
 interface SidebarProps {
   user: User;
@@ -114,6 +120,7 @@ export function Sidebar({
   onDeleteConversation,
   onSignOut,
 }: SidebarProps) {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -184,7 +191,16 @@ export function Sidebar({
         <div className="my-2 " />
 
         {SECONDARY_NAV.map((item) => (
-          <NavRow key={item.id} icon={item.icon} label={item.label} collapsed={collapsed} />
+          <NavRow
+            key={item.id}
+            icon={item.icon}
+            label={item.label}
+            collapsed={collapsed}
+            onClick={() => {
+              const path = NAV_PATHS[item.id];
+              if (path) navigate(path);
+            }}
+          />
         ))}
 
         {/* History — when collapsed, show just an icon that re-expands the sidebar on click */}

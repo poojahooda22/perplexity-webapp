@@ -10,6 +10,7 @@ import type { AuthenticatedRequest } from './auth.js';
 import { prisma } from './db.js';
 import { financeRouter } from './finance/routes.js';
 import { buildFinanceTools } from './finance/tools.js';
+import { buildGmailTools } from './connectors/gmail/tools.js';
 import { buildFinanceSystem } from './finance/skills.js';
 import { discoverRouter } from './discover/routes.js';
 import { gmailRouter } from './connectors/gmail/routes.js';
@@ -221,6 +222,55 @@ async function streamFinanceAnswer(opts: {
     const tail = sourcesImagesTail(sources, []);
     opts.res.write(tail);
     return { fullAnswer, tail, finishReason };
+}
+
+// ASSISTANT vertical: a tool-calling agent over the user's connected Gmail (read-only in M2a).
+// Same shape as streamFinanceAnswer but the tools close over `userId` so the model can only ever
+// touch THIS user's mailbox. No web sources, so the <SOURCES>/<IMAGES> tail is empty.
+function buildAssistantSystem(): string {
+    const today = new Date().toISOString().slice(0, 10);
+    return (
+        "You are Lumina's assistant with secure, read-only access to the user's connected Gmail via " +
+        "tools (unreadCount, listEmails, getEmail). Use them to answer questions about the user's email: " +
+        "how many unread, what's new, who emailed, and to read or summarize specific messages. Workflow: " +
+        "call listEmails to find messages (use a Gmail query like 'is:unread' or 'from:name' when helpful), " +
+        "then getEmail by id to read one in full. Be concise and well-formatted — render lists of emails as " +
+        "a markdown list showing sender, subject, and date. NEVER invent senders, subjects, or content; " +
+        "report only what the tools return. If a tool returns an `error` about Gmail not being connected or " +
+        "expired, tell the user to (re)connect Gmail on the Connectors page. You can READ email but cannot " +
+        "SEND yet (sending is coming soon). Today is " + today + "."
+    );
+}
+
+async function streamAssistantAnswer(opts: {
+    res: import("express").Response;
+    model: string;
+    userId: string;
+    system: string;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<{ fullAnswer: string; tail: string }> {
+    const tools = buildGmailTools({ userId: opts.userId });
+    const result = streamText({
+        model: opts.model,
+        system: opts.system,
+        messages: opts.messages,
+        tools,
+        stopWhen: stepCountIs(6), // bound tool round-trips per turn
+        abortSignal: disconnectSignal(opts.res),
+        onStepFinish: (step) => {
+            const used = (step.toolCalls ?? []).map((c) => c.toolName);
+            if (used.length) console.log(`[assistant-hook] step tools=[${used.join(",")}] finish=${step.finishReason}`);
+        },
+        onError: ({ error }) => console.error("assistant streamText error:", error),
+    });
+    let fullAnswer = "";
+    for await (const textPart of result.textStream) {
+        fullAnswer += textPart;
+        opts.res.write(textPart);
+    }
+    const tail = sourcesImagesTail([], []); // assistant has no web sources/images
+    opts.res.write(tail);
+    return { fullAnswer, tail };
 }
 
 // Turn user-attached images/documents into AI-SDK multimodal content parts.
@@ -598,6 +648,21 @@ app.post("/perplexity_ask", middleware, async (req: AuthenticatedRequest, res) =
             return;
         }
 
+        // ASSISTANT vertical → agentic Gmail tool-calling. No semantic cache / pre-search.
+        if (req.body.vertical === "assistant") {
+            writeStreamHeaders(res, conversation.id);
+            const { fullAnswer, tail } = await streamAssistantAnswer({
+                res,
+                model: resolveModel(req.body.model),
+                userId: req.userId,
+                system: buildAssistantSystem(),
+                messages: [{ role: "user", content: query }],
+            });
+            await persistTurns(persistUserTurn, conversation.id, fullAnswer, tail);
+            res.end();
+            return;
+        }
+
         // step 3 - SEMANTIC CACHE. Resolve the model up front (the cache is keyed on it).
         //          Skip the cache entirely for time-sensitive queries (prices/news/"today")
         //          and for requests with attachments (the answer depends on the upload).
@@ -732,6 +797,28 @@ app.post("/perplexity_ask/follow_up", middleware, async (req: AuthenticatedReque
             const { fullAnswer, tail } = await streamFinanceAnswer({
                 res,
                 model: resolveModel(req.body.model),
+                system,
+                messages: [...history, { role: "user" as const, content: query }],
+            });
+            await persistTurns(persistUserTurn, conversation.id, fullAnswer, tail);
+            res.end();
+            return;
+        }
+
+        // ASSISTANT vertical → agentic Gmail tool-calling follow-up (compacted history, no pre-search).
+        if (req.body.vertical === "assistant") {
+            const { summary, history } = await buildConversationHistory(conversation.messages);
+            const system = summary
+                ? `${buildAssistantSystem()}
+
+## Earlier conversation (summary of older turns)
+${summary}`
+                : buildAssistantSystem();
+            writeStreamHeaders(res, conversation.id);
+            const { fullAnswer, tail } = await streamAssistantAnswer({
+                res,
+                model: resolveModel(req.body.model),
+                userId: req.userId,
                 system,
                 messages: [...history, { role: "user" as const, content: query }],
             });

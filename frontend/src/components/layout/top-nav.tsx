@@ -5,7 +5,7 @@ import type { ChatTab } from "@/components/chat-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/animated-tabs";
 
-export const SECTION_TABS = ["Discover", "Finance", "Health", "Academic"];
+export const SECTION_TABS = ["Discover", "Finance", "Health", "Academic", "Assistant"];
 export type Section = (typeof SECTION_TABS)[number];
 
 const CHAT_TABS: { id: ChatTab; label: string; icon: ComponentType<{ className?: string }> }[] = [

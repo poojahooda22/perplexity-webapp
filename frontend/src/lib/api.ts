@@ -98,8 +98,9 @@ interface StreamOpts {
   model?: string;
   /** Attached images/documents the model should analyze. */
   attachments?: Attachment[];
-  /** Which chat vertical to use server-side: "discover" (web search) or "finance" (tool agent). */
-  vertical?: "discover" | "finance";
+  /** Which chat vertical to use server-side: "discover" (web search), "finance" (tool agent),
+   *  or "assistant" (connected-tools agent, e.g. Gmail). */
+  vertical?: "discover" | "finance" | "assistant";
 }
 
 async function streamPost(
