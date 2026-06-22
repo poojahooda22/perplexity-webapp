@@ -3,6 +3,14 @@
     "chrome-devtools": {
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"]
+    },
+    "graphify": {
+      "command": "C:\\Users\\Redsparrow\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+      "args": [
+        "-m",
+        "graphify.serve",
+        "e:\\Development\\Portfolio-phase2\\perplexity-webapp\\graphify-out\\graph.json"
+      ]
     }
   }
 }

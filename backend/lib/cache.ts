@@ -70,6 +70,26 @@ async function writeEntry<T>(key: string, entry: Entry<T>, ttlSeconds: number): 
   }
 }
 
+// Fetch fresh + write the cache, de-duped via `inflight` so concurrent callers AND the
+// stale-while-revalidate trigger below share ONE upstream call. Resolves with the fresh data.
+function doRefresh<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
+  let p = inflight.get(key) as Promise<T> | undefined;
+  if (!p) {
+    const startedAt = Date.now();
+    p = (async () => {
+      const data = await fetcher();
+      await writeEntry(key, { data, fetchedAt: startedAt }, ttlSeconds);
+      return data;
+    })();
+    inflight.set(key, p);
+    void p.then(
+      () => inflight.delete(key),
+      () => inflight.delete(key),
+    );
+  }
+  return p;
+}
+
 export async function getOrRefresh<T>(
   key: string,
   ttlSeconds: number,
@@ -77,32 +97,38 @@ export async function getOrRefresh<T>(
 ): Promise<CacheResult<T>> {
   const now = Date.now();
   const existing = await readEntry<T>(key);
+
+  // Fresh (age < ttl) → serve as-is.
   if (existing && now - existing.fetchedAt < ttlSeconds * 1000) {
     return { data: existing.data, fetchedAt: existing.fetchedAt, stale: false, hit: true };
   }
-  try {
-    // Share one in-flight fetch across concurrent callers for the same key.
-    let p = inflight.get(key) as Promise<T> | undefined;
-    if (!p) {
-      p = fetcher();
-      inflight.set(key, p);
-      void Promise.resolve(p).then(
-        () => inflight.delete(key),
-        () => inflight.delete(key),
-      );
-    }
-    const data = await p;
-    await writeEntry(key, { data, fetchedAt: now }, ttlSeconds);
-    return { data, fetchedAt: now, stale: false, hit: false };
-  } catch (err) {
-    if (existing) {
-      // Upstream failed but we have a prior value — serve it stale rather than fail the read.
+
+  // STALE-WHILE-REVALIDATE: a stale-but-present value is served INSTANTLY while a refresh runs in
+  // the background. The key latency win — the first user after a TTL lapse no longer blocks on the
+  // slow upstream (LLM / 3rd-party); they get the recent cached copy in ~ms and the next read sees
+  // the refreshed value. Survives because the hard-TTL keeps stale entries around (see writeEntry).
+  if (existing) {
+    void doRefresh(key, ttlSeconds, fetcher).catch((err) =>
       console.warn(
-        `[cache] refresh failed for "${key}", serving stale:`,
+        `[cache] background refresh failed for "${key}", keeping stale:`,
         err instanceof Error ? err.message : err,
-      );
-      return { data: existing.data, fetchedAt: existing.fetchedAt, stale: true, hit: true };
-    }
-    throw err;
+      ),
+    );
+    return { data: existing.data, fetchedAt: existing.fetchedAt, stale: true, hit: true };
   }
+
+  // Empty cache (first-ever / truly cold) → block once on the fetch. The ONLY path that waits; the
+  // warmer (forceRefresh on startup + cron) pre-populates so real users hit this rarely or never.
+  const data = await doRefresh(key, ttlSeconds, fetcher);
+  return { data, fetchedAt: now, stale: false, hit: false };
+}
+
+// Force a fresh fetch + cache write and AWAIT it (de-duped via `inflight`). For the cron/startup
+// WARMER, which must actually populate the cache (not serve stale) so warmed reads are instant.
+export async function forceRefresh<T>(
+  key: string,
+  ttlSeconds: number,
+  fetcher: () => Promise<T>,
+): Promise<T> {
+  return doRefresh(key, ttlSeconds, fetcher);
 }

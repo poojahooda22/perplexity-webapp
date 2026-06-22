@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Checking repo-wiki freshness…",
+            "command": "c=$(git status --porcelain -- backend frontend/src worker 2>/dev/null); w=$(git status --porcelain -- .claude/repo-wiki 2>/dev/null); if [ -n \"$c\" ] && [ -z \"$w\" ]; then printf '%s\\n' '{\"systemMessage\":\"\\ud83d\\udcdd Code changed but .claude/repo-wiki/ was not updated. Consider /wiki-ingest to keep the repo map current (or commit if this code is already mapped).\"}'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

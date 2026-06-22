@@ -9,3 +9,7 @@ out/
 *.log
 bun.lockb
 *.local
+
+# Graphify code-graph trial artifacts (regenerable: `graphify update <path>`)
+graphify-out/
+**/graphify-out/

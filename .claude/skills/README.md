@@ -17,6 +17,35 @@
 
 ---
 
+## Quick cheat-sheet — just say this
+
+> **You don't have to memorize trigger words.** Claude reads every skill's `description` and
+> matches the *meaning* of what you ask — say it in plain English and the right skill loads.
+> To force one, type `/skill-name` (e.g. `/finance-markets`). There are **14 skills**, not 2.
+
+| When you want to work on… | Just say something like… | Skill that loads |
+|---|---|---|
+| **Stock / crypto prices, the Finance page** | "fix the watchlist", "the stock price is wrong", "Finnhub quote", "add a sector", "NIFTY / S&P" | `finance-markets` |
+| **Charts & indicators** | "the candlestick chart", "add an RSI / MACD", "a screener", "backtest" | `trading-systems` |
+| **Coins, DeFi, prediction markets** | "CoinGecko data", "bitcoin market cap", "Polymarket odds", "on-chain" | `crypto-defi` |
+| **Web search & citations (Discover)** | "the search answer", "citations / sources", "follow-up question", "Discover feed" | `research-agent` |
+| **The chat engine itself** | "the streaming engine", "add a tool", "model routing", "compaction", "the stream protocol" | `ai-sdk-agent` |
+| **Embeddings / the semantic cache** | "the answer cache", "pgvector", "embeddings", "make it real RAG", "rerank" | `rag-retrieval` |
+| **Gmail / OAuth connectors** | "connect Gmail", "the token vault", "schedule an email", "the assistant tab" | `connectors-oauth` |
+| **The Health tab** | "health news", "lab report upload", "medical disclaimer" | `health-discover` |
+| **The Academic tab** | "papers / DOIs", "OpenAlex", "scholarly search" | `academic-discover` |
+| **The look & feel of the app** | "the chat UI", "the composer / search box", "the theme", "sign-in", "a section tab" | `lumina-frontend` |
+| **How to write React/TS *well*** | "should this hook use useMemo?", "fix this re-render", "this type is wrong", "Zustand vs Context" | `react-typescript` |
+| **Tests for the screen / UI** | "write a frontend test", "test this component / hook", "test the API client" | `bun-testing` |
+| **Tests for the server** | "write a backend test", "test this route", "mock Prisma / Supabase" | `backend-testing` |
+| **Run a loop until a metric is hit** | "loop until latency < 300 ms", "iterate until tests pass", "optimize / reduce X", "run a /loop", "Ralph loop" | `improvement-loop` |
+
+> Note: testing is split — **`bun-testing` = front-end (screen) tests**, **`backend-testing` =
+> server tests**. There IS a backend testing skill. For exact technical keywords, see the
+> [Keyword → skill quick map](#keyword--skill-quick-map) lower down.
+
+---
+
 ## The stack these skills target
 
 Bun + Express 5 + TypeScript (ESM, `.js` import extensions) · Vercel AI SDK v6 (`streamText`,
@@ -57,10 +86,12 @@ names like `/perplexity_ask` are the one internal exception.)
 | [`react-typescript`](react-typescript/SKILL.md) | Generic React 19 + TS + JS craft (sits *under* lumina-frontend) | ✅ built | writing components, hooks (useCallback/useMemo/refs), re-renders, performance, bundle size, client data fetching, advanced TS types, state management (Zustand vs Context vs TanStack), refactoring, testing |
 | [`bun-testing`](bun-testing/SKILL.md) | Frontend testing on Bun | ✅ built | `bun:test` + happy-dom + Testing Library; component/hook/api-client/streaming-render tests; the `renderWithProviders` + fetch/Supabase mock harness |
 | [`backend-testing`](backend-testing/SKILL.md) | Backend testing on Bun | ✅ built | `bun:test` tiered strategy; mocking Prisma/Supabase/fetch/AI-SDK; auth + conversations + finance/discover providers + streaming `/perplexity_ask` |
+| [`improvement-loop`](improvement-loop/SKILL.md) | Verifiable agentic improvement loops (meta/process) | ✅ built | running a measure→diagnose→research→plan→execute→verify loop until a mechanical metric is hit; `/loop` vs `/schedule`; verifiable exit + max-iteration safety cap + independent verifier; the Ralph-Wiggum lineage; the finance cold-fetch latency case study (9.3 s → 3 ms) |
 
-> **Status:** 13 skills built — `SKILL.md` + `references/` (111 reference docs). Three are generic
-> craft/testing layers — `react-typescript` (React/TS), `bun-testing` (frontend tests), and
-> `backend-testing` (backend tests); the other 10 are Lumina-specific.
+> **Status:** 14 skills built — `SKILL.md` + `references/` (116 reference docs). Four are generic
+> craft/process layers — `react-typescript` (React/TS), `bun-testing` (frontend tests),
+> `backend-testing` (backend tests), and `improvement-loop` (how to run a verifiable optimization loop,
+> grounded in the finance latency case study); the other 10 are Lumina-specific.
 
 ---
 
@@ -79,6 +110,7 @@ names like `/perplexity_ask` are the one internal exception.)
 - "react component / hook / useCallback / useMemo / re-render / performance / bundle size / code splitting / data fetching / typescript type / generic / discriminated union / zustand / state management / refactor / react 19 / testing" → **react-typescript**
 - "frontend test / bun test / happy-dom / testing-library / renderWithProviders / component test / mock fetch" → **bun-testing**
 - "backend test / bun test / mock prisma / mock supabase / test the route / test the middleware / integration test / test streaming / coverage" → **backend-testing**
+- "loop until / iterate until / optimize X until / reduce latency / Ralph loop / /loop / /schedule / verifiable exit / measure-plan-execute-verify / agentic loop" → **improvement-loop**
 
 ---
 

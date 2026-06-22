@@ -1,0 +1,16 @@
+# Keep the Graphify code-graph focused on hand-written source.
+# node_modules / .git / __pycache__ are already excluded by Graphify's built-in defaults,
+# and everything in .gitignore is honored too — this file adds project-specific exclusions.
+
+# Generated Prisma client (machine-generated types, not authored source — huge + noisy)
+**/prisma/generated/
+
+# Throwaway / probe scripts not wired into the app
+backend/_finnhub_probe.ts
+
+# Graphify's own output (also gitignored)
+graphify-out/
+**/graphify-out/
+
+# Build / dependency lock noise
+**/*.d.ts

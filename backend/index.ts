@@ -8,7 +8,7 @@ import { buildSystemPrompt, buildUserPrompt, classifyQuery } from './prompt.js';
 import { middleware } from './auth.js';
 import type { AuthenticatedRequest } from './auth.js';
 import { prisma } from './db.js';
-import { financeRouter } from './finance/routes.js';
+import { financeRouter, warmFinanceCache } from './finance/routes.js';
 import { buildFinanceTools } from './finance/tools.js';
 import { buildGmailTools } from './connectors/gmail/tools.js';
 import { buildFinanceSystem } from './finance/skills.js';
@@ -747,7 +747,15 @@ ${summary}`
 
 if (!process.env.VERCEL) {
     const PORT = Number(process.env.PORT) || 3001;
-    app.listen(PORT, () => console.log(`backend listening on http://localhost:${PORT}`));
+    app.listen(PORT, () => {
+        console.log(`backend listening on http://localhost:${PORT}`);
+        // Warm the finance cache on startup so the FIRST user fetch hits a populated cache (no
+        // empty-cache cold window). Fire-and-forget; reads serve stale-while-revalidate meanwhile.
+        // On Vercel there's no persistent listen — the cron route (cron-job.org) does this instead.
+        void warmFinanceCache()
+            .then((r) => console.log(`[warm] finance cache: ${r.filter((x) => x.ok).length}/${r.length} keys warmed`))
+            .catch((e) => console.warn('[warm] finance warm failed:', e instanceof Error ? e.message : e));
+    });
 }
 
 export default app;

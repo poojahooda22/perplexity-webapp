@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { Router, type RequestHandler } from "express";
-import { getOrRefresh } from "../lib/cache.js";
+import { getOrRefresh, forceRefresh } from "../lib/cache.js";
 import { financeRateLimit } from "../lib/ratelimit.js";
 import { fetchCrypto, fetchPredictions, fetchIndices, fetchStocks, fetchSectors, type Market } from "./sources.js";
 import { fetchMarketSummary } from "./summary.js";
@@ -91,8 +91,36 @@ financeRouter.get("/home", financeRateLimit, async (_req, res) => {
   });
 });
 
-// Cron warmer. Forces a refresh of every series so reads stay hot. Wire a free scheduler
-// (cron-job.org) to POST here with the CRON_SECRET; the guard is skipped if it's unset.
+// Every cache entry the warmer keeps hot. Tuple = [cacheKey, ttlSeconds, fetcher]. We use
+// forceRefresh (not getOrRefresh) so the warmer actually FETCHES + populates the cache; reads then
+// serve it instantly (fresh, or stale-while-revalidate once the TTL lapses). Keys mirror the ones
+// the routes build (finance:<name> for US, finance:in:<name> for India). Covers discover + research
+// too (previously unwarmed → they used to go cold for the first user after a TTL lapse).
+const WARM_JOBS: [string, number, () => Promise<unknown>][] = [
+  ["finance:indices", TTL.indices, () => fetchIndices("us")],
+  ["finance:stocks", TTL.stocks, () => fetchStocks("us")],
+  ["finance:sectors", TTL.sectors, () => fetchSectors("us")],
+  ["finance:crypto", TTL.crypto, fetchCrypto],
+  ["finance:predictions", TTL.predictions, fetchPredictions],
+  ["finance:summary", TTL.summary, () => fetchMarketSummary("us")],
+  ["finance:research", TTL.research, fetchAllResearch],
+  ["finance:discover", TTL.discover, () => fetchDiscover("us")],
+  ["finance:in:indices", TTL.indices, () => fetchIndices("in")],
+  ["finance:in:stocks", TTL.stocks, () => fetchStocks("in")],
+  ["finance:in:sectors", TTL.sectors, () => fetchSectors("in")],
+  ["finance:in:summary", TTL.summary, () => fetchMarketSummary("in")],
+  ["finance:in:discover", TTL.discover, () => fetchDiscover("in")],
+];
+
+// Warm every finance cache entry. Called on server startup (index.ts) and by the cron route, so the
+// FIRST user after a restart / TTL lapse is served from cache and never pays the cold upstream cost.
+export async function warmFinanceCache(): Promise<{ key: string; ok: boolean }[]> {
+  const results = await Promise.allSettled(WARM_JOBS.map(([key, ttl, fn]) => forceRefresh(key, ttl, fn)));
+  return WARM_JOBS.map(([key], i) => ({ key, ok: results[i]!.status === "fulfilled" }));
+}
+
+// Cron warmer endpoint. Wire a free scheduler (cron-job.org) to POST here with the CRON_SECRET
+// (guard skipped if unset) on an interval ≤ the shortest TTL so the cache stays hot in prod.
 financeRouter.post("/cron/refresh", async (req, res) => {
   const secret = process.env.CRON_SECRET;
   if (secret) {
@@ -101,21 +129,5 @@ financeRouter.post("/cron/refresh", async (req, res) => {
     const provided = bearer || (req.headers["x-cron-secret"] as string | undefined);
     if (provided !== secret) return res.status(401).json({ error: "unauthorised" });
   }
-  const jobs: [string, () => Promise<unknown>][] = [
-    ["indices", fetchIndices],
-    ["stocks", fetchStocks],
-    ["sectors", fetchSectors],
-    ["crypto", fetchCrypto],
-    ["predictions", fetchPredictions],
-    // LLM+Tavily-backed summaries — warm them so the first user after a TTL lapse doesn't pay
-    // the cold generation cost (they're otherwise never pre-warmed).
-    ["summary", () => fetchMarketSummary("us")],
-    // India market (separate finance:in:* keys, matching marketReadRoute).
-    ["in:indices", () => fetchIndices("in")],
-    ["in:stocks", () => fetchStocks("in")],
-    ["in:sectors", () => fetchSectors("in")],
-    ["in:summary", () => fetchMarketSummary("in")],
-  ];
-  const results = await Promise.allSettled(jobs.map(([key, fn]) => getOrRefresh(`finance:${key}`, 0, fn)));
-  res.json({ refreshed: jobs.map(([key], i) => ({ key, ok: results[i]!.status === "fulfilled" })) });
+  res.json({ refreshed: await warmFinanceCache() });
 });

@@ -37,10 +37,20 @@ they are NOT shipped to or loaded by the product at runtime.
 | writing/optimizing React + TS *itself* — components, hooks (useCallback/useMemo/refs), re-renders, performance, bundle size, client data fetching, advanced types, state management (Zustand), refactoring, testing | [`react-typescript`](.claude/skills/react-typescript/SKILL.md) |
 | writing/running/debugging **frontend** tests — `bun:test` + happy-dom + Testing Library, component/hook/api/streaming-render tests | [`bun-testing`](.claude/skills/bun-testing/SKILL.md) |
 | writing/running/debugging **backend** tests — `bun:test`, mocking Prisma/Supabase/fetch/AI-SDK, auth + providers + route/streaming integration | [`backend-testing`](.claude/skills/backend-testing/SKILL.md) |
+| running an iterate-until-a-metric loop — optimize/reduce latency/bundle/bugs, "loop until X", `/loop` vs `/schedule`, verifiable exit + safety cap + independent verifier (the Ralph-Wiggum lineage) | [`improvement-loop`](.claude/skills/improvement-loop/SKILL.md) |
 
 When a task matches a skill, open its `SKILL.md` and read its **Non-Negotiables**, **Anti-Patterns**,
 and **Decision Tree** before writing code. The decision tree routes you to the one or two
 `references/*.md` the task needs — never load a whole `references/` folder at once.
+
+## Repo map — consult BEFORE locating code
+Before grepping to find where something lives, read
+[`.claude/repo-wiki/index.md`](.claude/repo-wiki/index.md) — the living, file-cited map of *this* codebase
+(the route table, the streaming wire protocol, feature/flow traces, the cross-cutting rules). It exists so
+structure isn't re-derived every session; treat `:line` numbers as hints to re-confirm. The wiki is the
+*noun* (what exists & where); the skills above are the *verb* (how to build). **After building or changing a
+feature, run `/wiki-ingest`** to keep the map current; `/wiki-lint` checks it for drift. Conventions:
+[`.claude/repo-wiki/WIKI.md`](.claude/repo-wiki/WIKI.md).
 
 ## Cross-cutting non-negotiables
 1. **Never invent a finance number** (price/level/stat). Tools fetch; the model grounds. Failed tools
