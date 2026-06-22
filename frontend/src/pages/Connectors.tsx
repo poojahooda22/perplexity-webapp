@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { motion } from "motion/react";
 import {
   AlertCircle,
@@ -20,8 +20,8 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
-import { supabase } from "@/lib/supabase";
 import { gmailStartUrl } from "@/lib/api";
+import { useRequireAuth } from "@/lib/auth-context";
 import { useGmailDisconnect, useGmailSend, useGmailStatus } from "@/hooks/use-connectors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,27 +134,13 @@ const CALLBACK_BANNERS: Record<string, { ok: boolean; text: string }> = {
 };
 
 export default function Connectors() {
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const { loading } = useRequireAuth();
 
-  const [authChecked, setAuthChecked] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
 
   const status = useGmailStatus();
-
-  // ── Auth guard (same as Dashboard) ───────────────────────────────────────
-  useEffect(() => {
-    let active = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      if (!data.session) navigate("/auth");
-      else setAuthChecked(true);
-    });
-    return () => {
-      active = false;
-    };
-  }, [navigate]);
 
   // Show the post-OAuth banner once, then strip the query param.
   useEffect(() => {
@@ -167,7 +153,7 @@ export default function Connectors() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!authChecked) {
+  if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />

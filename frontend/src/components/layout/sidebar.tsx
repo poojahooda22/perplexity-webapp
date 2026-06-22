@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { ComponentType } from "react";
 import { useNavigate } from "react-router";
 import type { User } from "@supabase/supabase-js";
@@ -109,7 +109,7 @@ function NavRow({
   );
 }
 
-export function Sidebar({
+function SidebarComponent({
   user,
   conversations,
   loadingConversations,
@@ -327,3 +327,8 @@ export function Sidebar({
     </aside>
   );
 }
+
+// Memoized: the shell re-renders on every streamed chat chunk, but the sidebar's props
+// (conversations from the query cache, stable handlers) don't change during streaming, so
+// React.memo skips re-rendering the whole history list per token.
+export const Sidebar = memo(SidebarComponent);

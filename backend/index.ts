@@ -1,6 +1,6 @@
 import { tavily } from '@tavily/core';
 import express from 'express';
-import { streamText, embed, generateText, stepCountIs } from 'ai';
+import { streamText, embed, stepCountIs } from 'ai';
 import { buildSystemPrompt, buildUserPrompt, classifyQuery } from './prompt.js';
 // NOTE: this file is named auth.ts, NOT middleware.ts, on purpose. Vercel treats a
 // root-level `middleware.ts` as Edge Middleware (V8 isolates, no Node modules) and the
@@ -61,55 +61,13 @@ app.use("/discover", discoverRouter);
 // no auth header; identity rides in the encrypted OAuth `state`).
 app.use("/connectors/gmail", gmailRouter);
 
-// Vercel AI Gateway model ids (`<provider>/<model>`, dot in the model segment).
-// A bare string model routes through the gateway (uses AI_GATEWAY_API_KEY), giving
-// access to every provider from one key. Keep in sync with the frontend picker.
-const ALLOWED_MODELS = new Set([
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3-pro-preview",
-    "anthropic/claude-opus-4.7",
-    "anthropic/claude-sonnet-4.6",
-    "anthropic/claude-haiku-4.5",
-    "openai/gpt-5.5-pro",
-    "openai/gpt-5.5",
-    "xai/grok-4.3",
-]);
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
-function resolveModel(model: unknown): string {
-    return typeof model === "string" && ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
-}
 
-// Per-user rate limit — a stopgap "lock" on the paid endpoints until a real credits/billing
-// system lands (the `step 2 - TODO: credits` below). Without this, any signed-in user can
-// loop the endpoint and run up Tavily + embedding + premium-model (gpt-5.5-pro/opus) bills.
-// In-memory + per-instance, so it's best-effort on multi-instance deploys — make it Redis
-// for hard limits. Sliding window.
-const RATE_LIMIT = 20;          // max requests…
-const RATE_WINDOW_MS = 60_000;  // …per minute, per user
-const rateHits = new Map<string, number[]>();
-function rateLimited(userId: string): boolean {
-    const now = Date.now();
-    const hits = (rateHits.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-    hits.push(now);
-    rateHits.set(userId, hits);
-    return hits.length > RATE_LIMIT;
-}
 
 
 /* ────────────────────────────────────────────────────────────────────────
  * Helpers
  * ──────────────────────────────────────────────────────────────────────── */
 
-// URL-friendly slug from a query, e.g. "Best way to learn Rust?" -> "best-way-to-learn-rust"
-function slugify(text: string): string {
-    const base = text
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 60);
-    return `${base || "conversation"}-${crypto.randomUUID().slice(0, 8)}`;
-}
 
 // Run a Tavily web search and shape the sources + images we stream back.
 async function webSearch(query: string) {
@@ -136,15 +94,6 @@ async function webSearch(query: string) {
     return { results, sources, images };
 }
 
-// The sources + images wire blocks as ONE string — written to the live stream AND
-// persisted with the assistant message, so reloading a conversation from history keeps
-// its links + images (the frontend parses this exact format either way).
-function sourcesImagesTail(sources: unknown, images: unknown): string {
-    return (
-        `\n<SOURCES>\n${JSON.stringify(sources)}\n<SOURCES>\n` +
-        `\n<IMAGES>\n${JSON.stringify(images)}\n<IMAGES>\n`
-    );
-}
 
 // AbortSignal that fires when the client disconnects mid-stream, so the model/tool loop stops
 // burning tokens (and, for finance, vendor credits) on a response nobody will read.
@@ -273,102 +222,9 @@ async function streamAssistantAnswer(opts: {
     return { fullAnswer, tail };
 }
 
-// Turn user-attached images/documents into AI-SDK multimodal content parts.
-// Images become `image` parts; everything else (PDFs, docs) becomes `file` parts.
-// The model must be vision/doc-capable (Claude, Gemini, GPT) — Sonar won't read them.
-type RawAttachment = { name?: string; mediaType?: string; base64?: string };
-type ContentPart =
-    | { type: "text"; text: string }
-    | { type: "image"; image: string; mediaType: string }
-    | { type: "file"; data: string; mediaType: string; filename?: string };
-
-function buildAttachmentParts(input: unknown): ContentPart[] {
-    if (!Array.isArray(input)) return [];
-    return (input as RawAttachment[])
-        .filter((a) => a && typeof a.base64 === "string" && a.base64.length > 0)
-        .map((a) => {
-            const mediaType = a.mediaType || "application/octet-stream";
-            return mediaType.startsWith("image/")
-                ? { type: "image" as const, image: a.base64!, mediaType }
-                : { type: "file" as const, data: a.base64!, mediaType, filename: a.name };
-        });
-}
-
-// Render the search results as a numbered, citeable context block for the LLM, so the
-// inline [n] citations it produces line up with the sources list the client shows.
-function formatSearchContext(
-    results: Array<{ title?: string; url: string; content?: string }>,
-): string {
-    return results
-        .map((r, i) => `[${i + 1}] ${r.title ?? r.url}\nURL: ${r.url}\n${(r.content ?? "").slice(0, 1200)}`)
-        .join("\n\n");
-}
 
 
-/* ────────────────────────────────────────────────────────────────────────
- * Conversation compaction (Phase 3.4)  — keep follow-ups fast on long threads.
- *
- * Sending the whole raw transcript every follow-up grows tokens without bound and
- * eventually blows the context window. Instead we (1) strip the <SOURCES>/<IMAGES>
- * blobs we appended for the UI, (2) keep the last few turns verbatim, and (3) fold
- * everything older into a one-shot summary (cheap model). The summary is returned
- * separately so the caller can put it in the SYSTEM prompt — keeping the `messages`
- * array a clean user/assistant alternation.
- * ──────────────────────────────────────────────────────────────────────── */
-const KEEP_RECENT_MESSAGES = 6;                      // ≈ last 3 turns sent verbatim
-const SUMMARY_MODEL = "anthropic/claude-haiku-4.5";  // fast + cheap for compaction
 
-// Remove the <SOURCES>…<SOURCES> / <IMAGES>…<IMAGES> wire blocks (closing tag is the
-// same token as the opening one). They're for the frontend, not useful as LLM context.
-function stripWireTail(content: string): string {
-    return content
-        .replace(/\n?<SOURCES>[\s\S]*?<SOURCES>\n?/g, "")
-        .replace(/\n?<IMAGES>[\s\S]*?<IMAGES>\n?/g, "")
-        // Drop the model's own output-protocol markup so follow-ups don't replay it as context
-        // (the persona wraps answers in <ANSWER>…</ANSWER> + a <FOLLOW_UPS> block).
-        .replace(/<FOLLOW_UPS>[\s\S]*?<\/FOLLOW_UPS>/g, "") // suggested-questions block — drop entirely
-        .replace(/<\/?ANSWER>/g, "")                         // unwrap the answer, keep its text
-        .trim();
-}
-
-async function buildConversationHistory(
-    messages: Array<{ role: "user" | "Assistant"; content: string }>,
-): Promise<{ summary: string | null; history: Array<{ role: "user" | "assistant"; content: string }> }> {
-    // Normalize roles (DB enum 'Assistant' -> 'assistant') and strip UI blobs.
-    const turns = messages.map((m) => ({
-        role: m.role === "Assistant" ? ("assistant" as const) : ("user" as const),
-        content: stripWireTail(m.content),
-    }));
-
-    // Short thread: send verbatim, no summary, no extra cost.
-    if (turns.length <= KEEP_RECENT_MESSAGES) return { summary: null, history: turns };
-
-    // Long thread: keep the last N verbatim, summarize everything older.
-    const older = turns.slice(0, turns.length - KEEP_RECENT_MESSAGES);
-    let recent = turns.slice(turns.length - KEEP_RECENT_MESSAGES);
-    // Anthropic requires the first message to be a 'user' turn — drop any leading assistant.
-    while (recent[0]?.role === "assistant") recent = recent.slice(1);
-
-    const transcript = older
-        .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.content}`)
-        .join("\n\n");
-    try {
-        const { text } = await generateText({
-            model: SUMMARY_MODEL,
-            system:
-                "You compress conversations. Summarize the exchange below, preserving key facts, " +
-                "named entities, the user's goals, and any decisions needed to answer future " +
-                "follow-ups. Be concise; bullet points are fine. Do not invent anything.",
-            prompt: transcript,
-        });
-        return { summary: text.trim(), history: recent };
-    } catch (e) {
-        // Best-effort: on failure fall back to recent turns only (still bounded) rather
-        // than failing the request or resending the whole transcript.
-        console.error("[compaction] summarize failed:", e instanceof Error ? e.message : String(e));
-        return { summary: null, history: recent };
-    }
-}
 
 
 /* ────────────────────────────────────────────────────────────────────────

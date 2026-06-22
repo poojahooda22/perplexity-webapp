@@ -1,3 +1,10 @@
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
 env = "BUN_PUBLIC_*"
+
+# `bun test` preloads these before any test file (order matters):
+#   tests/setup/test-preload.ts   → env + global Supabase fake (must run first)
+#   tests/setup/happydom.ts       → DOM globals (document/window/localStorage/matchMedia)
+#   tests/setup/testing-library.ts → jest-dom matchers + per-test cleanup/fetch/session reset
+[test]
+preload = ["./tests/setup/test-preload.ts", "./tests/setup/happydom.ts", "./tests/setup/testing-library.ts"]

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { memo, type ComponentType } from "react";
 import { CalendarClock, FileText, Images, Link2 } from "lucide-react";
 
 import type { ChatTab } from "@/components/chat-view";
@@ -14,7 +14,7 @@ const CHAT_TABS: { id: ChatTab; label: string; icon: ComponentType<{ className?:
   { id: "images", label: "Images", icon: Images },
 ];
 
-export function TopNav({
+function TopNavComponent({
   mode = "home",
   activeTab = "answer",
   onTabChange,
@@ -88,3 +88,6 @@ export function TopNav({
     </header>
   );
 }
+
+// Memoized for the same reason as Sidebar: stable props during streaming → no per-token re-render.
+export const TopNav = memo(TopNavComponent);
