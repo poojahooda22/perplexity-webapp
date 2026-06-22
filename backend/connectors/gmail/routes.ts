@@ -16,7 +16,6 @@ import {
   buildAuthUrl,
   openState,
   exchangeCode,
-  refreshAccess,
   revokeToken,
   emailFromIdToken,
   GMAIL_SCOPES,
@@ -49,7 +48,14 @@ gmailRouter.get("/start", middleware, (req: AuthenticatedRequest, res) => {
 // Google redirects the browser here with ?code & ?state (or ?error). We verify state,
 // exchange the code, store the encrypted refresh token, then redirect back to the app.
 gmailRouter.get("/callback", async (req, res) => {
-  const back = (status: string) => res.redirect(`${frontendUrl()}/connectors?gmail=${status}`);
+  // On success, land the user on the Assistant tab (where they USE the connection); on
+  // cancel/error, keep them on the Connectors page to retry. Dashboard reads ?connected=gmail.
+  const back = (status: string) =>
+    res.redirect(
+      status === "connected"
+        ? `${frontendUrl()}/?connected=gmail`
+        : `${frontendUrl()}/connectors?gmail=${status}`,
+    );
 
   if (typeof req.query.error === "string") return back("denied"); // user clicked "Cancel"
   const code = typeof req.query.code === "string" ? req.query.code : null;

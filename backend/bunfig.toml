@@ -1,0 +1,6 @@
+# Backend test runner config. Mirrors frontend/bunfig.toml.
+# The preload sets deterministic env and replaces the throwing seams (Prisma + Supabase)
+# with controllable fakes BEFORE any test file imports the code under test.
+[test]
+preload = ["./tests/setup/test-preload.ts"]
+coverageThreshold = 0.0  # raise once the suite matures (e.g. 0.7); 0 = report only, never fail

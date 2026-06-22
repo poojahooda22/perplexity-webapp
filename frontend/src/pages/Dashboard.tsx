@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { useNavigate } from "react-router";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { Loader2 } from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
@@ -17,12 +17,15 @@ import { FinanceView } from "@/components/finance/finance-view";
 import { AcademicView } from "@/components/discover/topic-discover-view";
 import { HealthView } from "@/components/discover/health-view";
 import { SearchHero } from "@/components/search-hero";
+import { AssistantView } from "@/components/assistant/assistant-view";
 import { ChatView } from "@/components/chat-view";
 import { DEFAULT_MODEL } from "@/components/model-menu";
+import { RenderProfiler } from "@/lib/render-profiler";
 
 export default function Dashboard() {
   const { user, loading } = useRequireAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Shell-level UI state shared with the top-nav (section) and composer (model).
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
@@ -70,6 +73,17 @@ export default function Dashboard() {
     navigate("/auth");
   }, [navigate]);
 
+  // After a successful Gmail connect, the OAuth callback redirects to /?connected=gmail —
+  // open the Assistant tab (where the connection is used), then strip the param.
+  useEffect(() => {
+    if (searchParams.get("connected")) {
+      setSection("Assistant");
+      searchParams.delete("connected");
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (loading || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-background text-muted-foreground">
@@ -83,38 +97,56 @@ export default function Dashboard() {
   return (
     <AppShell
       sidebar={
-        <Sidebar
-          user={user}
-          conversations={conversations}
-          loadingConversations={loadingConversations}
-          activeConversationId={conversationId}
-          onNewChat={handleNewChat}
-          onSelectConversation={handleSelectConversation}
-          onRenameConversation={handleRename}
-          onDeleteConversation={handleDelete}
-          onSignOut={handleSignOut}
-        />
+        <RenderProfiler id="Sidebar">
+          <Sidebar
+            user={user}
+            conversations={conversations}
+            loadingConversations={loadingConversations}
+            activeConversationId={conversationId}
+            onNewChat={handleNewChat}
+            onSelectConversation={handleSelectConversation}
+            onRenameConversation={handleRename}
+            onDeleteConversation={handleDelete}
+            onSignOut={handleSignOut}
+          />
+        </RenderProfiler>
       }
       header={
-        <TopNav
-          mode={inChat ? "chat" : "home"}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          section={section}
-          onSectionChange={setSection}
-        />
+        <RenderProfiler id="TopNav">
+          <TopNav
+            mode={inChat ? "chat" : "home"}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            section={section}
+            onSectionChange={setSection}
+          />
+        </RenderProfiler>
       }
     >
       {inChat ? (
-        <ChatView turns={turns} activeTab={activeTab} onFollowUp={handleFollowUp} busy={busy} />
+        <RenderProfiler id="ChatView">
+          <ChatView turns={turns} activeTab={activeTab} onFollowUp={handleFollowUp} busy={busy} />
+        </RenderProfiler>
       ) : section === "Finance" ? (
-        <FinanceView onAsk={handleAsk} />
+        <RenderProfiler id="FinanceView">
+          <FinanceView onAsk={handleAsk} />
+        </RenderProfiler>
       ) : section === "Academic" ? (
-        <AcademicView onAsk={handleAsk} />
+        <RenderProfiler id="AcademicView">
+          <AcademicView onAsk={handleAsk} />
+        </RenderProfiler>
       ) : section === "Health" ? (
-        <HealthView onAsk={handleAsk} />
+        <RenderProfiler id="HealthView">
+          <HealthView onAsk={handleAsk} />
+        </RenderProfiler>
+      ) : section === "Assistant" ? (
+        <RenderProfiler id="AssistantView">
+          <AssistantView onSubmit={handleAsk} model={model} onModelChange={setModel} />
+        </RenderProfiler>
       ) : (
-        <SearchHero onSubmit={handleAsk} model={model} onModelChange={setModel} />
+        <RenderProfiler id="SearchHero">
+          <SearchHero onSubmit={handleAsk} model={model} onModelChange={setModel} />
+        </RenderProfiler>
       )}
     </AppShell>
   );

@@ -14,6 +14,13 @@ import { buildGmailTools } from './connectors/gmail/tools.js';
 import { buildFinanceSystem } from './finance/skills.js';
 import { discoverRouter } from './discover/routes.js';
 import { gmailRouter } from './connectors/gmail/routes.js';
+// Pure helpers extracted from this file into lib/ so they're independently unit-testable.
+import { slugify } from './lib/slug.js';
+import { sourcesImagesTail, formatSearchContext, buildAttachmentParts, type ContentPart } from './lib/wire.js';
+import { resolveModel } from './lib/models.js';
+import { isTimeSensitive } from './lib/query-policy.js';
+import { createRateLimiter } from './lib/user-rate-limit.js';
+import { buildConversationHistory } from './lib/compaction.js';
 
 const app = express();
 
@@ -38,6 +45,10 @@ app.use((req, res, next) => {
         ? (origin ?? "*")                                   // dev: reflect
         : (origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]);
     res.header("Access-Control-Allow-Origin", allowed);
+    // Let the browser expose detailed Resource Timing (TTFB / transfer size) for these
+    // cross-origin (:3001) responses to the :3000 frontend — needed for client-side latency
+    // breakdowns. Same allowlist semantics as CORS above.
+    res.header("Timing-Allow-Origin", allowed);
     res.header("Vary", "Origin");
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -60,6 +71,9 @@ app.use("/discover", discoverRouter);
 // route because /connectors/gmail/callback must stay PUBLIC (Google's browser redirect carries
 // no auth header; identity rides in the encrypted OAuth `state`).
 app.use("/connectors/gmail", gmailRouter);
+
+// Per-user rate limit (20 req/min) — stopgap until real credits/billing. In-memory + per-instance.
+const rateLimited = createRateLimiter(20, 60_000);
 
 
 
@@ -255,13 +269,6 @@ const CACHE_TTL_DAYS = 7;
 // self-heal (e.g. table created after the server started) with no restart.
 const CACHE_COOLDOWN_MS = 60_000;
 
-// Time-sensitive queries must NEVER be served from cache (prices, news, "today"…),
-// so we skip the cache entirely for them — no read, no write. Critical for finance.
-const TIME_SENSITIVE =
-    /\b(today|now|currently|current|latest|live|breaking|news|price|prices|stock|stocks|score|scores|weather|tonight|right now|this (week|month|year)|yesterday|tomorrow|202\d)\b/i;
-function isTimeSensitive(query: string): boolean {
-    return TIME_SENSITIVE.test(query);
-}
 
 // Cache availability — a short cooldown window, NOT a permanent kill-switch.
 let cacheDownUntil = 0;

@@ -55,10 +55,12 @@ names like `/perplexity_ask` are the one internal exception.)
 | `academic-discover` | The Academic vertical | ✅ built | OpenAlex, scholarly search, citations/DOIs, paper cards, academic ranking |
 | `lumina-frontend` | The React/Vite chat UI | ✅ built | chat-view streaming render, parsing the wire tail, TanStack Query, shadcn/Tailwind, section tabs, the docked composer, theme |
 | [`react-typescript`](react-typescript/SKILL.md) | Generic React 19 + TS + JS craft (sits *under* lumina-frontend) | ✅ built | writing components, hooks (useCallback/useMemo/refs), re-renders, performance, bundle size, client data fetching, advanced TS types, state management (Zustand vs Context vs TanStack), refactoring, testing |
+| [`bun-testing`](bun-testing/SKILL.md) | Frontend testing on Bun | ✅ built | `bun:test` + happy-dom + Testing Library; component/hook/api-client/streaming-render tests; the `renderWithProviders` + fetch/Supabase mock harness |
+| [`backend-testing`](backend-testing/SKILL.md) | Backend testing on Bun | ✅ built | `bun:test` tiered strategy; mocking Prisma/Supabase/fetch/AI-SDK; auth + conversations + finance/discover providers + streaming `/perplexity_ask` |
 
-> **Status:** all 11 skills are built — `SKILL.md` + `references/` (96 reference docs). The
-> `react-typescript` skill is generic React/TS craft (imported from rareLab `react-typescript` +
-> Jeffallan `react-expert`, enriched with Vercel `react-best-practices`); the other 10 are Lumina-specific.
+> **Status:** 13 skills built — `SKILL.md` + `references/` (111 reference docs). Three are generic
+> craft/testing layers — `react-typescript` (React/TS), `bun-testing` (frontend tests), and
+> `backend-testing` (backend tests); the other 10 are Lumina-specific.
 
 ---
 
@@ -75,6 +77,8 @@ names like `/perplexity_ask` are the one internal exception.)
 - "OpenAlex / paper / DOI / scholarly / academic search" → **academic-discover**
 - "chat-view / streaming UI / TanStack / shadcn / composer / section tab / theme" → **lumina-frontend**
 - "react component / hook / useCallback / useMemo / re-render / performance / bundle size / code splitting / data fetching / typescript type / generic / discriminated union / zustand / state management / refactor / react 19 / testing" → **react-typescript**
+- "frontend test / bun test / happy-dom / testing-library / renderWithProviders / component test / mock fetch" → **bun-testing**
+- "backend test / bun test / mock prisma / mock supabase / test the route / test the middleware / integration test / test streaming / coverage" → **backend-testing**
 
 ---
 

@@ -35,6 +35,8 @@ they are NOT shipped to or loaded by the product at runtime.
 | the Academic vertical — OpenAlex, citations/DOIs, paper cards | [`academic-discover`](.claude/skills/academic-discover/SKILL.md) |
 | the React/Vite chat UI — streaming render, TanStack, shadcn, composer, auth | [`lumina-frontend`](.claude/skills/lumina-frontend/SKILL.md) |
 | writing/optimizing React + TS *itself* — components, hooks (useCallback/useMemo/refs), re-renders, performance, bundle size, client data fetching, advanced types, state management (Zustand), refactoring, testing | [`react-typescript`](.claude/skills/react-typescript/SKILL.md) |
+| writing/running/debugging **frontend** tests — `bun:test` + happy-dom + Testing Library, component/hook/api/streaming-render tests | [`bun-testing`](.claude/skills/bun-testing/SKILL.md) |
+| writing/running/debugging **backend** tests — `bun:test`, mocking Prisma/Supabase/fetch/AI-SDK, auth + providers + route/streaming integration | [`backend-testing`](.claude/skills/backend-testing/SKILL.md) |
 
 When a task matches a skill, open its `SKILL.md` and read its **Non-Negotiables**, **Anti-Patterns**,
 and **Decision Tree** before writing code. The decision tree routes you to the one or two
