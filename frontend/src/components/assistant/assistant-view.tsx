@@ -66,13 +66,12 @@ export function AssistantView({
   return (
     <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-10">
       <div className="mb-8 flex flex-col items-center text-center">
-        <div className="mb-3 flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        {/* <div className="mb-3 flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <Sparkles className="size-5" />
-        </div>
+        </div> */}
         <h1 className="text-2xl font-semibold tracking-tight">Assistant</h1>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Ask across your connected apps — read and act on your email, with Outlook, Slack & GitHub
-          coming soon.
+          Ask across your connected apps — read and act on your email
         </p>
       </div>
 

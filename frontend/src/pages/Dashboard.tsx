@@ -73,12 +73,15 @@ export default function Dashboard() {
     navigate("/auth");
   }, [navigate]);
 
-  // After a successful Gmail connect, the OAuth callback redirects to /?connected=gmail —
-  // open the Assistant tab (where the connection is used), then strip the param.
+  // Open the Assistant tab when arriving with a hint: ?connected=gmail (post-OAuth callback) or
+  // ?tab=assistant (e.g. "Back" from the Connectors page). Then strip the param.
   useEffect(() => {
-    if (searchParams.get("connected")) {
-      setSection("Assistant");
+    const connected = searchParams.get("connected");
+    const tab = searchParams.get("tab");
+    if (connected || tab === "assistant") setSection("Assistant");
+    if (connected || tab) {
       searchParams.delete("connected");
+      searchParams.delete("tab");
       setSearchParams(searchParams, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

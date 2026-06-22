@@ -182,7 +182,7 @@ export default function Connectors() {
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-5xl px-6 py-10">
         <Link
-          to="/"
+          to="/?tab=assistant"
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
