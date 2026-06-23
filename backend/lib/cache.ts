@@ -35,6 +35,19 @@ const redis =
 
 export const cacheBackend: "upstash" | "memory" = redis ? "upstash" : "memory";
 
+// Dev-only credit saver: FREEZE the LLM-backed finance surfaces (market summary, global research,
+// daily briefing). When FINANCE_LLM_FROZEN=1, any frozen-key read that already has a cached value is
+// served from cache and NEVER regenerated — so browsing the UI on localhost burns ZERO Vercel AI
+// Gateway credits. With a durable cache (Upstash) the cached copy survives restarts → $0 across
+// restarts; on the in-memory fallback the value is rebuilt once per cold boot, then frozen. No effect
+// on the free-API surfaces (crypto/indices/…), which never cost LLM credits. To force fresh data
+// while frozen: POST /finance/cron/refresh?force=1 (bypasses the freeze).
+export const llmFrozen = process.env.FINANCE_LLM_FROZEN === "1";
+
+// Per-call options. `llm:true` marks a cost-bearing LLM surface so the freeze switch and the
+// conditional warmer (warmIfStale) treat it specially.
+export type RefreshOpts = { llm?: boolean };
+
 // In-memory fallback (local dev / any instance without Upstash). Keep entries past their TTL
 // so the stale-on-error fallback has something to serve. Agent tools key on model-chosen
 // symbol sets (e.g. finance:quote:<symbols>), so the keyspace is UNbounded — cap the Map and
@@ -94,9 +107,18 @@ export async function getOrRefresh<T>(
   key: string,
   ttlSeconds: number,
   fetcher: () => Promise<T>,
+  opts: RefreshOpts = {},
 ): Promise<CacheResult<T>> {
   const now = Date.now();
   const existing = await readEntry<T>(key);
+
+  // FROZEN dev mode (LLM surfaces only): serve the cached copy and NEVER regenerate — no Gateway
+  // credits while testing. Staleness is still reported honestly (non-negotiable #5); we just don't
+  // refresh. A still-empty key (no cached value yet) falls through and is populated ONCE below.
+  if (opts.llm && llmFrozen && existing) {
+    const stale = now - existing.fetchedAt >= ttlSeconds * 1000;
+    return { data: existing.data, fetchedAt: existing.fetchedAt, stale, hit: true };
+  }
 
   // Fresh (age < ttl) → serve as-is.
   if (existing && now - existing.fetchedAt < ttlSeconds * 1000) {
@@ -131,4 +153,25 @@ export async function forceRefresh<T>(
   fetcher: () => Promise<T>,
 ): Promise<T> {
   return doRefresh(key, ttlSeconds, fetcher);
+}
+
+// Conditional warmer used at startup/cron: refresh a key ONLY if it's missing or stale, so a server
+// restart never needlessly regenerates a surface that's still fresh in a durable cache — this is what
+// stops repeated dev restarts from re-burning Gateway credits on the LLM surfaces. When the LLM
+// surfaces are FROZEN, an LLM key that already has ANY cached value is skipped entirely (a
+// still-empty one is populated once so the UI isn't blank). Returns whether a refresh actually ran.
+export async function warmIfStale<T>(
+  key: string,
+  ttlSeconds: number,
+  fetcher: () => Promise<T>,
+  opts: RefreshOpts = {},
+): Promise<{ warmed: boolean }> {
+  // Frozen LLM surface: the warmer never (re)generates it — even an empty key is left for the first
+  // actual page visit to populate ONCE (so a dev only testing, say, the crypto tab pays $0 for the
+  // briefing/summary/research they never open).
+  if (opts.llm && llmFrozen) return { warmed: false };
+  const existing = await readEntry<T>(key);
+  if (existing && Date.now() - existing.fetchedAt < ttlSeconds * 1000) return { warmed: false }; // still fresh
+  await forceRefresh(key, ttlSeconds, fetcher);
+  return { warmed: true };
 }

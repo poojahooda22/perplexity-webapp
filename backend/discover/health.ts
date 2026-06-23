@@ -52,7 +52,18 @@ type NewsDataItem = {
   source_id?: string | null;
   pubDate?: string;
   category?: string[];
+  country?: string[]; // NewsData per-article publish origin, e.g. ["india"], ["united states of america"]
 };
+
+// How many cards the feed serves up-front (was 18). Health requires every card to carry an image.
+const HEALTH_TARGET = 20;
+
+// The GLOBAL feed must NOT surface India-published outlets (e.g. "Business News India") — those
+// belong to the India feed. NewsData tags each article with a `country` list; treat an article as
+// India-origin if that list names India. (The India feed is queried with country=in and is kept.)
+function isIndiaOrigin(it: NewsDataItem): boolean {
+  return (it.country ?? []).some((c) => String(c).toLowerCase().includes("india"));
+}
 type NewsDataResponse = { status?: string; results?: NewsDataItem[]; message?: string };
 
 async function callNewsData(url: string): Promise<NewsDataResponse> {
@@ -64,7 +75,7 @@ async function callNewsData(url: string): Promise<NewsDataResponse> {
   return body;
 }
 
-async function fetchHealthNewsData(market: Market): Promise<DiscoverPayload> {
+export async function fetchHealthNewsData(market: Market): Promise<DiscoverPayload> {
   const provenance: Provenance = {
     source: "NewsData.io",
     commercialOk: false,
@@ -91,6 +102,8 @@ async function fetchHealthNewsData(market: Market): Promise<DiscoverPayload> {
   const articles: DiscoverArticle[] = [];
   for (const it of data.results ?? []) {
     if (!it.link || !it.title) continue;
+    // Global feed: drop India-published outlets so they don't leak in (the India feed keeps them).
+    if (market !== "in" && isIndiaOrigin(it)) continue;
     articles.push({
       id: it.article_id || canonicalUrl(String(it.link)),
       title: String(it.title),
@@ -101,7 +114,7 @@ async function fetchHealthNewsData(market: Market): Promise<DiscoverPayload> {
       category: it.category?.[0] ?? "health",
     });
   }
-  return { articles: finalizeArticles(articles), provenance };
+  return { articles: finalizeArticles(articles, { max: HEALTH_TARGET, requireImage: true }), provenance };
 }
 
 async function fetchHealthTavily(market: Market): Promise<DiscoverPayload> {
@@ -143,19 +156,31 @@ async function fetchHealthTavily(market: Market): Promise<DiscoverPayload> {
   articles.forEach((a, i) => {
     a.image = ogImages[i] ?? null;
   });
-  return { articles: finalizeArticles(articles), provenance };
+  return { articles: finalizeArticles(articles, { max: HEALTH_TARGET, requireImage: true }), provenance };
 }
 
-// Orchestrator: prefer NewsData (real images) when its key is set; otherwise / on failure /
-// when it returns nothing, fall back to the Tavily search so the carousel always has news.
+// Orchestrator: prefer NewsData (real images). If it returns a full page (≥ HEALTH_TARGET) use it;
+// if it returns a PARTIAL page (e.g. after the global India-origin filter trims it), top it up with
+// the Tavily lane so the feed reliably serves HEALTH_TARGET image-bearing cards; if NewsData has no
+// key / fails / returns nothing, fall back to Tavily alone so the carousel always has news.
 export async function fetchHealthDiscover(market: Market = "us"): Promise<DiscoverPayload> {
+  let primary: DiscoverPayload | null = null;
   if (newsdataKey()) {
     try {
       const nd = await fetchHealthNewsData(market);
-      if (nd.articles.length > 0) return nd;
+      if (nd.articles.length >= HEALTH_TARGET) return nd; // already a full page
+      if (nd.articles.length > 0) primary = nd; // partial → merge with Tavily below
     } catch (e) {
       console.warn("[discover] health NewsData failed, falling back to Tavily:", e instanceof Error ? e.message : e);
     }
   }
-  return fetchHealthTavily(market);
+  const fallback = await fetchHealthTavily(market);
+  if (!primary) return fallback;
+  // NewsData first (real publisher images), Tavily fills to HEALTH_TARGET. requireImage keeps every
+  // card complete; dedup drops any overlap. Provenance stays NewsData's (the primary source).
+  const merged = finalizeArticles([...primary.articles, ...fallback.articles], {
+    max: HEALTH_TARGET,
+    requireImage: true,
+  });
+  return { articles: merged, provenance: primary.provenance };
 }

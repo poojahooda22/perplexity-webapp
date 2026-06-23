@@ -26,8 +26,11 @@ export function faviconFromUrl(url: string): string {
   }
 }
 
-// Public-domain artwork (Wikimedia, verified-stable) for category cards.
-export const wiki = (file: string) => `https://commons.wikimedia.org/wiki/Special:FilePath/${file}?width=1000`;
+// Public-domain artwork (Wikimedia, verified-stable) for category cards. The tiles render ~300–380px
+// wide, so we request a right-sized thumbnail (default 400px ≈ a quarter of the old 1000px → ~6× fewer
+// image bytes) instead of a full-res file — the dominant cost of the Academic/Discover tab's load.
+export const wiki = (file: string, width = 400) =>
+  `https://commons.wikimedia.org/wiki/Special:FilePath/${file}?width=${width}`;
 
 function CarouselButton({
   onClick,
@@ -109,6 +112,7 @@ export function CategoryCard({ item, onClick }: { item: Category; onClick: () =>
         src={item.image}
         alt=""
         loading="lazy"
+        decoding="async"
         className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-105"
       />
       <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />

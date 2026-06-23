@@ -2,6 +2,17 @@
 
 Append-only, newest at top. Prefix `## [YYYY-MM-DD] <op> | <title>` (so `grep "^## \[" log.md | head` works).
 
+## [2026-06-24] ingest | Insights tests + Health/Academic Discover fixes
+Tests added for the Finance→Insights ("Pulse") feature (backend 18 + frontend 8; no feature code changed)
+and three Discover fixes shipped + verified live:
+- Health GLOBAL feed now drops India-origin outlets (NewsData `country` → `health.ts → isIndiaOrigin`);
+  India feed keeps `country=in`. Feed serves 20 image-only cards (`HEALTH_TARGET`, `finalizeArticles`
+  `{max,requireImage}` in `shared.ts`); `fetchHealthDiscover` backfills NewsData→Tavily.
+- Academic static tiles: `discover-parts.tsx → wiki()` now `?width=400` (was 1000, ~4× lighter) + `decoding="async"`.
+- Live (Chrome MCP): global 20/0-India/all-imaged; India 20/11-India/all-imaged; academic tiles width=400.
+- New ADR decisions/0005-discover-global-excludes-india-origin.md.
+Touched: index.md, features/discover-search.md, decisions/0005-discover-global-excludes-india-origin.md, log.md.
+
 ## [2026-06-23] ingest | Implement Graphify code-graph (whole repo) + MCP + git hooks
 Stood up the deterministic AST code-graph as the structural companion to the wiki.
 - Built whole-repo graph: 2924 nodes / 3708 edges / 222 communities / 320 files, 100% EXTRACTED, 0 token cost

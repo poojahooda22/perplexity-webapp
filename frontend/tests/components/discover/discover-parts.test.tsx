@@ -59,9 +59,15 @@ describe("faviconFromUrl", () => {
 });
 
 describe("wiki", () => {
-  test("builds a Wikimedia Special:FilePath URL with width", () => {
+  test("builds a Wikimedia Special:FilePath URL with a right-sized default width", () => {
     expect(wiki("Mona_Lisa.jpg")).toBe(
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Mona_Lisa.jpg?width=1000",
+      "https://commons.wikimedia.org/wiki/Special:FilePath/Mona_Lisa.jpg?width=400",
+    );
+  });
+
+  test("accepts a custom width override", () => {
+    expect(wiki("Mona_Lisa.jpg", 800)).toBe(
+      "https://commons.wikimedia.org/wiki/Special:FilePath/Mona_Lisa.jpg?width=800",
     );
   });
 });

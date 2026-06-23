@@ -24,6 +24,7 @@ These live in the root [`CLAUDE.md`](../../CLAUDE.md) and are mirrored file-by-f
 - [`product-at-scale.md`](product-at-scale.md) — the R-SCALE tier discipline for lists/search/contested/spike surfaces.
 - [`skill-layer-law.md`](skill-layer-law.md) — dev-skill vs runtime product-skill vs tool: where a new thing goes.
 - [`confirm-before-big-work.md`](confirm-before-big-work.md) — restate intent + plan before multi-file/irreversible work.
+- [`red-team-negation-loop.md`](red-team-negation-loop.md) — **on-demand (R70).** Three independent veteran negators try to *prove* an artifact is junior; it earns the bar only by surviving. Invoke with "red-team this" / "negate this" / "run the negation loop". The heavy counterpart to the light `confirm-before-big-work`.
 
 ## How these are enforced
 

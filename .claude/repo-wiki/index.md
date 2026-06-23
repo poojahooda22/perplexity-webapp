@@ -8,8 +8,8 @@ citations straight to the source — before grepping.** Conventions: [WIKI.md](W
 > CLAUDE.md non-negotiables.
 
 ## Features — "what is this vertical & how is it wired"
-- [discover-search](features/discover-search.md) — the default web-grounded chat + Discover feeds.
-  cites: backend/index.ts, prompt.ts, discover/routes.ts | fresh: 2026-06-22
+- [discover-search](features/discover-search.md) — the default web-grounded chat + Discover feeds (health geo-filter, 20 image-only cards, right-sized academic tiles).
+  cites: backend/index.ts, prompt.ts, discover/routes.ts, discover/health.ts, discover/shared.ts, frontend/.../discover-parts.tsx | fresh: 2026-06-24
 - [finance](features/finance.md) — cached `/finance/*` reads + the agentic finance chat + live prices.
   cites: backend/finance/*, worker/index.ts, components/finance/finance-view.tsx | fresh: 2026-06-22
 - [connectors-gmail](features/connectors-gmail.md) — Gmail OAuth + token vault + read-only assistant tools.
@@ -51,6 +51,7 @@ citations straight to the source — before grepping.** Conventions: [WIKI.md](W
 - [0002-worker-on-fly-for-websockets](decisions/0002-worker-on-fly-for-websockets.md) — live prices off Vercel.
 - [0003-news-headline-linkout-only](decisions/0003-news-headline-linkout-only.md) — drop publisher body text.
 - [0004-us-india-no-new-providers](decisions/0004-us-india-no-new-providers.md) — switcher rides existing stack.
+- [0005-discover-global-excludes-india-origin](decisions/0005-discover-global-excludes-india-origin.md) — global Health feed drops India-origin; 20 image-only cards + backfill.
 
 ## Glossary
 - [glossary](glossary.md) — project vocabulary (wire tail, loadSkill, playbook, provenance, compaction…).

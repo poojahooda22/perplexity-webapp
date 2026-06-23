@@ -15,6 +15,9 @@ export const prismaFake = {
     delete: fn(),
   },
   message: { create: fn(), deleteMany: fn() },
+  // Finance scorecard ("Track Record") models — falsifiable house-view calls + daily mood readings.
+  houseViewCall: { findMany: fn(), findFirst: fn(), create: fn(), update: fn() },
+  marketMoodReading: { findMany: fn(), upsert: fn() },
   $transaction: mock(async (ops: unknown) => (Array.isArray(ops) ? ops : ops)),
   $queryRaw: fn(),
   $executeRaw: fn(),
@@ -25,6 +28,8 @@ export function resetPrisma() {
     prismaFake.user.upsert,
     ...Object.values(prismaFake.conversation),
     ...Object.values(prismaFake.message),
+    ...Object.values(prismaFake.houseViewCall),
+    ...Object.values(prismaFake.marketMoodReading),
     prismaFake.$transaction,
     prismaFake.$queryRaw,
     prismaFake.$executeRaw,

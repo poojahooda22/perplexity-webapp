@@ -9,6 +9,7 @@ import { middleware } from './auth.js';
 import type { AuthenticatedRequest } from './auth.js';
 import { prisma } from './db.js';
 import { financeRouter, warmFinanceCache } from './finance/routes.js';
+import { cacheBackend, llmFrozen } from './lib/cache.js';
 import { buildFinanceTools } from './finance/tools.js';
 import { buildGmailTools } from './connectors/gmail/tools.js';
 import { buildFinanceSystem } from './finance/skills.js';
@@ -749,9 +750,19 @@ if (!process.env.VERCEL) {
     const PORT = Number(process.env.PORT) || 3001;
     app.listen(PORT, () => {
         console.log(`backend listening on http://localhost:${PORT}`);
+        // Cache backend (upstash = survives restarts → frozen surfaces stay $0; memory = wiped each
+        // restart → frozen surfaces rebuild once per boot) + whether the LLM surfaces are frozen.
+        console.log(
+            `[cache] backend=${cacheBackend}` +
+            (llmFrozen
+                ? ' • LLM surfaces FROZEN (FINANCE_LLM_FROZEN=1 → no Gateway credits on summary/research/briefing; force fresh via POST /finance/cron/refresh?force=1)'
+                : ''),
+        );
         // Warm the finance cache on startup so the FIRST user fetch hits a populated cache (no
-        // empty-cache cold window). Fire-and-forget; reads serve stale-while-revalidate meanwhile.
-        // On Vercel there's no persistent listen — the cron route (cron-job.org) does this instead.
+        // empty-cache cold window). Conditional (warmIfStale) — fresh/frozen surfaces are NOT
+        // regenerated, so a restart no longer re-burns Gateway credits. Fire-and-forget; reads serve
+        // stale-while-revalidate meanwhile. On Vercel there's no persistent listen — the cron route
+        // (cron-job.org) does this instead.
         void warmFinanceCache()
             .then((r) => console.log(`[warm] finance cache: ${r.filter((x) => x.ok).length}/${r.length} keys warmed`))
             .catch((e) => console.warn('[warm] finance warm failed:', e instanceof Error ? e.message : e));

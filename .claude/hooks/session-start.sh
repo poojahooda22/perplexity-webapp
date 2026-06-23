@@ -21,6 +21,7 @@ if [ -f "$DIR/rules/README.md" ]; then
   echo "- never invent a finance number · commercialOk gate · ESM .js imports · Vercel no sockets/timers ·"
   echo "  stream→persist before res.end() · secure tool args by closure · restart on new backend files"
   echo "- brand-is-lumina · commercial-ok-gate · product-at-scale (R-SCALE) · skill-layer-law · confirm-before-big-work"
+  echo "  + red-team-negation-loop (R70, on-demand: \"red-team this\" / \"negate this\")"
   echo "  (full text: .claude/rules/)"
   echo
 fi

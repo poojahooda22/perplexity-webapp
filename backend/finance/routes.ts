@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { Router, type RequestHandler } from "express";
-import { getOrRefresh, forceRefresh } from "../lib/cache.js";
+import { getOrRefresh, forceRefresh, warmIfStale, type RefreshOpts } from "../lib/cache.js";
 import { financeRateLimit } from "../lib/ratelimit.js";
 import {
   fetchCrypto,
@@ -41,10 +41,11 @@ const CACHE_KEYS = {
 };
 
 // A cached read handler: serve fresh-or-stale from cache, 502 only if there's nothing.
-function readRoute(key: string, ttl: number, fetcher: () => Promise<unknown>): RequestHandler {
+// `opts.llm` marks a cost-bearing LLM surface (honors the FINANCE_LLM_FROZEN dev switch).
+function readRoute(key: string, ttl: number, fetcher: () => Promise<unknown>, opts?: RefreshOpts): RequestHandler {
   return async (_req, res) => {
     try {
-      const r = await getOrRefresh(key, ttl, fetcher);
+      const r = await getOrRefresh(key, ttl, fetcher, opts);
       res.json({ ...(r.data as object), fetchedAt: r.fetchedAt, stale: r.stale });
     } catch (e) {
       console.error(`[finance] ${key} failed:`, e instanceof Error ? e.message : e);
@@ -59,12 +60,13 @@ function marketReadRoute(
   name: string,
   ttl: number,
   fetcher: (m: Market) => Promise<unknown>,
+  opts?: RefreshOpts,
 ): RequestHandler {
   return async (req, res) => {
     const market: Market = req.query.market === "in" ? "in" : "us";
     const key = market === "in" ? `finance:in:${name}` : `finance:${name}`;
     try {
-      const r = await getOrRefresh(key, ttl, () => fetcher(market));
+      const r = await getOrRefresh(key, ttl, () => fetcher(market), opts);
       res.json({ ...(r.data as object), fetchedAt: r.fetchedAt, stale: r.stale });
     } catch (e) {
       console.error(`[finance] ${key} failed:`, e instanceof Error ? e.message : e);
@@ -94,10 +96,11 @@ financeRouter.get("/indices", financeRateLimit, marketReadRoute("indices", TTL.i
 financeRouter.get("/stocks", financeRateLimit, marketReadRoute("stocks", TTL.stocks, fetchStocks));
 // Equity sectors — US: 11 SPDR Select Sector ETFs; India (?market=in): NSE sectoral indices.
 financeRouter.get("/sectors", financeRateLimit, marketReadRoute("sectors", TTL.sectors, fetchSectors));
-// Market Summary is LLM-backed → long TTL so it generates only ~once per window.
-financeRouter.get("/summary", financeRateLimit, marketReadRoute("summary", TTL.summary, fetchMarketSummary));
+// Market Summary is LLM-backed → long TTL so it generates only ~once per window. llm:true so the
+// FINANCE_LLM_FROZEN dev switch serves it from cache without re-generating (no Gateway credits).
+financeRouter.get("/summary", financeRateLimit, marketReadRoute("summary", TTL.summary, fetchMarketSummary, { llm: true }));
 // Global Research is LLM-backed + multi-category → 6h TTL (analytical content changes slowly).
-financeRouter.get("/research", financeRateLimit, readRoute(CACHE_KEYS.research, TTL.research, fetchAllResearch));
+financeRouter.get("/research", financeRateLimit, readRoute(CACHE_KEYS.research, TTL.research, fetchAllResearch, { llm: true }));
 // Discover news carousel — US: Finnhub /news; India (?market=in): Tavily India-publisher search.
 financeRouter.get("/discover", financeRateLimit, marketReadRoute("discover", TTL.discover, fetchDiscover));
 
@@ -109,7 +112,7 @@ financeRouter.get("/gdelt", financeRateLimit, marketReadRoute("gdelt", TTL.gdelt
 // Lumina Market Mood — GREEN-only macro-sentiment composite; market-aware.
 financeRouter.get("/mood", financeRateLimit, marketReadRoute("mood", TTL.mood, fetchMarketMood));
 // The Daily Briefing ("The Lumina Tape") — LLM-backed, grounded on the GREEN gauges + cited news.
-financeRouter.get("/briefing", financeRateLimit, marketReadRoute("briefing", TTL.briefing, generateBriefing));
+financeRouter.get("/briefing", financeRateLimit, marketReadRoute("briefing", TTL.briefing, generateBriefing, { llm: true }));
 // The public track-record scorecard (cheap, indexed DB read → always fresh, no cache so an
 // emit/resolve is reflected immediately).
 financeRouter.get("/scorecard", financeRateLimit, async (_req, res) => {
@@ -139,12 +142,13 @@ financeRouter.get("/home", financeRateLimit, async (_req, res) => {
   });
 });
 
-// Every cache entry the warmer keeps hot. Tuple = [cacheKey, ttlSeconds, fetcher]. We use
-// forceRefresh (not getOrRefresh) so the warmer actually FETCHES + populates the cache; reads then
-// serve it instantly (fresh, or stale-while-revalidate once the TTL lapses). Keys mirror the ones
-// the routes build (finance:<name> for US, finance:in:<name> for India). Covers discover + research
-// too (previously unwarmed → they used to go cold for the first user after a TTL lapse).
-const WARM_JOBS: [string, number, () => Promise<unknown>][] = [
+// Every cache entry the warmer keeps hot. Tuple = [cacheKey, ttlSeconds, fetcher, isLLM?]. The warmer
+// uses warmIfStale: it refreshes a key ONLY if it's missing or stale, so a restart never needlessly
+// regenerates a still-fresh surface — this is what stops repeated dev restarts from re-burning Vercel
+// AI Gateway credits on the LLM surfaces (summary/research/briefing, flagged isLLM=true, which are
+// also skipped entirely under FINANCE_LLM_FROZEN). Keys mirror the routes (finance:<name> US,
+// finance:in:<name> India). The cron route's ?force=1 bypasses both checks for a manual full refresh.
+const WARM_JOBS: [string, number, () => Promise<unknown>, boolean?][] = [
   ["finance:indices", TTL.indices, () => fetchIndices("us")],
   ["finance:stocks", TTL.stocks, () => fetchStocks("us")],
   ["finance:sectors", TTL.sectors, () => fetchSectors("us")],
@@ -154,26 +158,32 @@ const WARM_JOBS: [string, number, () => Promise<unknown>][] = [
   ["finance:crypto50:1d", TTL.crypto50, () => fetchLuminaCrypto50("1d")],
   ["finance:crypto50:5d", TTL.crypto50, () => fetchLuminaCrypto50("5d")],
   ["finance:predictions", TTL.predictions, fetchPredictions],
-  ["finance:summary", TTL.summary, () => fetchMarketSummary("us")],
-  ["finance:research", TTL.research, fetchAllResearch],
+  ["finance:summary", TTL.summary, () => fetchMarketSummary("us"), true],
+  ["finance:research", TTL.research, fetchAllResearch, true],
   ["finance:discover", TTL.discover, () => fetchDiscover("us")],
   // Market Insights (US). Mood reuses the recession+gdelt caches via in-flight de-dupe, so
   // warming all three hits each upstream ~once even though they run concurrently here.
   ["finance:recession", TTL.recession, fetchRecessionGauge],
   ["finance:gdelt", TTL.gdelt, () => fetchNewsSentiment("us")],
   ["finance:mood", TTL.mood, () => fetchMarketMood("us")],
-  ["finance:briefing", TTL.briefing, () => generateBriefing("us")],
+  ["finance:briefing", TTL.briefing, () => generateBriefing("us"), true],
   ["finance:in:indices", TTL.indices, () => fetchIndices("in")],
   ["finance:in:stocks", TTL.stocks, () => fetchStocks("in")],
   ["finance:in:sectors", TTL.sectors, () => fetchSectors("in")],
-  ["finance:in:summary", TTL.summary, () => fetchMarketSummary("in")],
+  ["finance:in:summary", TTL.summary, () => fetchMarketSummary("in"), true],
   ["finance:in:discover", TTL.discover, () => fetchDiscover("in")],
 ];
 
-// Warm every finance cache entry. Called on server startup (index.ts) and by the cron route, so the
-// FIRST user after a restart / TTL lapse is served from cache and never pays the cold upstream cost.
-export async function warmFinanceCache(): Promise<{ key: string; ok: boolean }[]> {
-  const results = await Promise.allSettled(WARM_JOBS.map(([key, ttl, fn]) => forceRefresh(key, ttl, fn)));
+// Warm every finance cache entry. Called on server startup (index.ts) and by the cron route. By
+// default (force=false) it uses warmIfStale → only missing/stale keys are fetched, and the FROZEN
+// LLM surfaces are left untouched, so the FIRST user after a restart is served from cache without
+// re-paying the cold upstream/LLM cost. force=true (cron ?force=1) regenerates everything regardless.
+export async function warmFinanceCache(force = false): Promise<{ key: string; ok: boolean }[]> {
+  const results = await Promise.allSettled(
+    WARM_JOBS.map(([key, ttl, fn, llm]) =>
+      force ? forceRefresh(key, ttl, fn) : warmIfStale(key, ttl, fn, { llm: Boolean(llm) }),
+    ),
+  );
   return WARM_JOBS.map(([key], i) => ({ key, ok: results[i]!.status === "fulfilled" }));
 }
 
@@ -187,7 +197,9 @@ financeRouter.post("/cron/refresh", async (req, res) => {
     const provided = bearer || (req.headers["x-cron-secret"] as string | undefined);
     if (provided !== secret) return res.status(401).json({ error: "unauthorised" });
   }
-  res.json({ refreshed: await warmFinanceCache() });
+  // ?force=1 regenerates every surface even if fresh or FROZEN — the manual "refresh now" button.
+  const force = req.query.force === "1" || req.query.force === "true";
+  res.json({ refreshed: await warmFinanceCache(force) });
 });
 
 // Scorecard crons — emit a daily falsifiable call from the mood, and resolve calls past their horizon.

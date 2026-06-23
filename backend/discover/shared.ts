@@ -88,20 +88,26 @@ export function toIso(input: unknown): string {
   return new Date().toISOString();
 }
 
-// Dedup (by canonical URL + exact lowercased title), drop title/url-less items, cap at
-// MAX_ARTICLES, and sort image-bearing cards first so the visible carousel page looks rich.
-export function finalizeArticles(articles: DiscoverArticle[]): DiscoverArticle[] {
+// Dedup (by canonical URL + exact lowercased title), drop title/url-less items, cap at `max`,
+// and sort image-bearing cards first so the visible carousel page looks rich. Pass
+// `requireImage: true` to keep ONLY cards that carry an image (no blank tiles in the feed).
+export function finalizeArticles(
+  articles: DiscoverArticle[],
+  opts: { max?: number; requireImage?: boolean } = {},
+): DiscoverArticle[] {
+  const max = opts.max ?? MAX_ARTICLES;
   const seen = new Set<string>();
   const out: DiscoverArticle[] = [];
   for (const a of articles) {
     if (!a.url || !a.title) continue;
+    if (opts.requireImage && !(a.image && a.image.trim())) continue; // image-complete cards only
     const urlKey = canonicalUrl(a.url);
     const titleKey = a.title.toLowerCase().trim();
     if (seen.has(urlKey) || seen.has(titleKey)) continue;
     seen.add(urlKey);
     seen.add(titleKey);
     out.push({ ...a, id: a.id || urlKey });
-    if (out.length >= MAX_ARTICLES) break;
+    if (out.length >= max) break;
   }
   out.sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0));
   return out;
