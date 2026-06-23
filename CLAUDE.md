@@ -28,6 +28,9 @@ they are NOT shipped to or loaded by the product at runtime.
 | the agent engine — `streamText`/tools/loops, prompt assembly, the runtime `loadSkill` system, model gateway, compaction, the SSE wire protocol, hooks | [`ai-sdk-agent`](.claude/skills/ai-sdk-agent/SKILL.md) |
 | web search, citations, query classification, the `<ANSWER>`/`<SOURCES>` protocol, Discover feeds, follow-ups, deep research | [`research-agent`](.claude/skills/research-agent/SKILL.md) |
 | embeddings, pgvector, the semantic cache, retrieval, chunking, reranking, evolving the cache into a knowledge-RAG | [`rag-retrieval`](.claude/skills/rag-retrieval/SKILL.md) |
+| the database — `schema.prisma`, a Prisma query, a migration, the generated client, driver adapters (`PrismaPg`), the `vector(1536)` column, DB performance/scale | [`prisma`](.claude/skills/prisma/SKILL.md) |
+| auth/sign-in, JWT validation (`auth.getUser`), the Supabase client/keys, Supabase Realtime (live prices), RLS, Supabase-side Postgres setup | [`supabase`](.claude/skills/supabase/SKILL.md) |
+| the hot cache (`cache.ts`), Upstash, rate limiting (`ratelimit.ts`), TTLs/stale-while-revalidate, distributed locks, read-spike scale | [`redis`](.claude/skills/redis/SKILL.md) |
 | charts, indicators, candlesticks, backtesting, screeners, trading UX (informational only) | [`trading-systems`](.claude/skills/trading-systems/SKILL.md) |
 | CoinGecko depth, crypto/token fundamentals, on-chain/DeFi, prediction markets | [`crypto-defi`](.claude/skills/crypto-defi/SKILL.md) |
 | OAuth connectors (Gmail), token vault, connector tools, human-in-the-loop approval, scheduling, Google scopes | [`connectors-oauth`](.claude/skills/connectors-oauth/SKILL.md) |

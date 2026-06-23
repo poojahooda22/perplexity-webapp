@@ -12,6 +12,8 @@
 // and demo with, but must be treated as not-cleared-for-public-display.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { getOrRefresh } from "../lib/cache.js";
+
 export type Provenance = {
   source: string;
   commercialOk: boolean;
@@ -29,6 +31,8 @@ export type CryptoCoin = {
   price: number;
   change24h: number | null;
   marketCap: number | null;
+  volume24h: number | null;
+  rank: number | null;
   sparkline: number[];
 };
 export type CryptoPayload = { coins: CryptoCoin[]; provenance: Provenance };
@@ -49,6 +53,8 @@ function mapCoinGeckoRow(c: Record<string, any>): CryptoCoin {
     price: Number(c.current_price ?? 0),
     change24h: c.price_change_percentage_24h != null ? Number(c.price_change_percentage_24h) : null,
     marketCap: c.market_cap != null ? Number(c.market_cap) : null,
+    volume24h: c.total_volume != null ? Number(c.total_volume) : null,
+    rank: c.market_cap_rank != null ? Number(c.market_cap_rank) : null,
     sparkline: Array.isArray(c.sparkline_in_7d?.price) ? c.sparkline_in_7d.price.map(Number) : [],
   };
 }
@@ -92,6 +98,166 @@ export async function fetchCryptoMarkets(
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
   const rows = (await res.json()) as Array<Record<string, any>>;
   return { coins: rows.map(mapCoinGeckoRow), provenance: cgProvenance() };
+}
+
+/* ── Crypto leaderboard (all-exchanges, ranked by 24h volume) ─────────── */
+
+// The "All Exchanges" leaderboard: top coins by 24h trading volume, floored at
+// $100M market cap. One CoinGecko /coins/markets call (order=volume_desc), filtered
+// + capped client-side (CoinGecko has no server-side market-cap floor). Aggregate
+// across exchanges — NOT a single venue (we can't redistribute Coinbase's own feed).
+// commercialOk:false (CoinGecko Demo) like every crypto series until a paid plan.
+export async function fetchCryptoLeaderboard(): Promise<CryptoPayload> {
+  const url =
+    `${COINGECKO_BASE}/coins/markets?vs_currency=usd&order=volume_desc` +
+    `&per_page=100&page=1&sparkline=true&price_change_percentage=24h`;
+  const res = await fetch(url, { headers: coingeckoHeaders() });
+  if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+  const rows = (await res.json()) as Array<Record<string, any>>;
+  const coins = rows
+    .map(mapCoinGeckoRow)
+    .filter((c) => (c.marketCap ?? 0) >= 100_000_000)
+    .sort((a, b) => (b.volume24h ?? 0) - (a.volume24h ?? 0))
+    .slice(0, 50);
+  return { coins, provenance: cgProvenance() };
+}
+
+/* ── Lumina Crypto 50 — our OWN cap-weighted index (not Coinbase 50) ───── */
+//
+// This is NOT the official Coinbase 50 / MarketVector COIN50 index — that index, its
+// level, its history, and its weights are licensed IP, and the public COIN50-PERP feed
+// is under Coinbase's "no redistribute/display" Market Data Terms. So we compute our OWN
+// transparent top-50 cap-weighted RETURN index from CoinGecko data, indexed to 100 at the
+// start of the selected range. The UI link-outs to the real Coinbase 50 for "learn more".
+//
+// History is approximated from the top constituents (which dominate the cap weight: BTC+ETH
+// alone are ~75%), so the whole index costs ~11 cached CoinGecko calls per range, not 50.
+// Source = CoinGecko → commercialOk follows cgProvenance (false on Demo).
+
+export type IndexPoint = { t: number; v: number };
+export type CryptoIndexRange = "1d" | "5d" | "1m" | "3m" | "6m" | "1y";
+export type CryptoIndexPayload = {
+  name: string;
+  range: CryptoIndexRange;
+  base: number; // index level at the start of the range (always 100)
+  value: number; // latest index level
+  changeAbs: number; // value − base (index points; == pct since base is 100)
+  changePct: number | null;
+  series: IndexPoint[];
+  standouts: CryptoCoin[]; // notable constituent movers
+  provenance: Provenance;
+};
+
+const INDEX_NAME = "Lumina Crypto 50";
+const INDEX_CONSTITUENTS = 6; // exclude stablecoins; the top-6 movers dominate the cap weight
+
+// Known stablecoins (+ a price-near-$1 heuristic) — excluded from a price-RETURN index since they
+// barely move and would only dampen the trajectory.
+const STABLE_SYMBOLS = new Set([
+  "USDT", "USDC", "DAI", "USDS", "USD1", "BUSD", "TUSD", "FDUSD", "PYUSD", "USDD", "GUSD", "FRAX", "LUSD", "USDE", "USDP",
+]);
+function isStablecoin(c: CryptoCoin): boolean {
+  if (STABLE_SYMBOLS.has(c.symbol)) return true;
+  return c.price > 0.95 && c.price < 1.05 && (c.change24h == null || Math.abs(c.change24h) < 0.5);
+}
+
+// Range -> { days fetched from CoinGecko, days shown }. Ranges >= 1m all FETCH days=365 and slice
+// client-side, so switching among 1m/3m/6m/1y reuses ONE cached history fetch per coin (the old
+// rate-limit killer was a fresh 11-call burst on every range).
+const RANGE_SPEC: Record<CryptoIndexRange, { days: number; slice: number }> = {
+  "1d": { days: 1, slice: 1 },
+  "5d": { days: 7, slice: 5 },
+  "1m": { days: 365, slice: 30 },
+  "3m": { days: 365, slice: 90 },
+  "6m": { days: 365, slice: 180 },
+  "1y": { days: 365, slice: 365 },
+};
+
+// One coin's price history, cached per (id, days) so the day-365 ranges share it. Throws on a
+// non-OK response so getOrRefresh serves stale instead of caching an empty series.
+async function coinHistory(id: string, days: number): Promise<[number, number][]> {
+  const ttl = days <= 1 ? 120 : 1800;
+  const r = await getOrRefresh(`finance:cg:mc:${id}:${days}`, ttl, async () => {
+    const url = `${COINGECKO_BASE}/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=${days}`;
+    const res = await fetch(url, { headers: coingeckoHeaders() });
+    if (!res.ok) throw new Error(`CoinGecko mc ${res.status}`);
+    const j = (await res.json()) as { prices?: [number, number][] };
+    return { prices: Array.isArray(j.prices) ? j.prices : [] };
+  });
+  return (r.data as { prices: [number, number][] }).prices;
+}
+
+export async function fetchLuminaCrypto50(
+  range: CryptoIndexRange = "6m",
+): Promise<CryptoIndexPayload> {
+  const spec = RANGE_SPEC[range] ?? RANGE_SPEC["6m"];
+
+  // Top-50 by market cap, cached + shared across ALL ranges (range-independent).
+  const topR = await getOrRefresh("finance:crypto50:top", 300, async () => {
+    const url =
+      `${COINGECKO_BASE}/coins/markets?vs_currency=usd&order=market_cap_desc` +
+      `&per_page=50&page=1&sparkline=false&price_change_percentage=24h`;
+    const res = await fetch(url, { headers: coingeckoHeaders() });
+    if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
+    return { rows: (await res.json()) as Array<Record<string, any>> };
+  });
+  const top = (topR.data as { rows: Array<Record<string, any>> }).rows.map(mapCoinGeckoRow);
+
+  const standouts = [...top]
+    .filter((c) => c.change24h != null)
+    .sort((a, b) => Math.abs(b.change24h ?? 0) - Math.abs(a.change24h ?? 0))
+    .slice(0, 8);
+
+  const basket = top.filter((c) => !isStablecoin(c) && (c.marketCap ?? 0) > 0).slice(0, INDEX_CONSTITUENTS);
+  const totalCap = basket.reduce((s, c) => s + (c.marketCap ?? 0), 0) || 1;
+
+  // Fetch histories with a small concurrency pool (CoinGecko rejects large concurrent bursts).
+  const POOL = 3;
+  const histories: ({ weight: number; prices: [number, number][] } | null)[] = [];
+  for (let i = 0; i < basket.length; i += POOL) {
+    const got = await Promise.all(
+      basket.slice(i, i + POOL).map(async (c) => {
+        try {
+          const prices = await coinHistory(c.id, spec.days);
+          return prices.length >= 2 ? { weight: (c.marketCap ?? 0) / totalCap, prices } : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    histories.push(...got);
+  }
+  const valid = histories.filter((h): h is { weight: number; prices: [number, number][] } => !!h);
+
+  const flat: CryptoIndexPayload = {
+    name: INDEX_NAME, range, base: 100, value: 100, changeAbs: 0, changePct: 0,
+    series: [], standouts, provenance: cgProvenance(),
+  };
+  if (valid.length === 0) return flat;
+
+  // Slice each coin's history to the requested window, then build a cap-weighted RETURN index:
+  // index(t) = 100 * sum_i( w_i * price_i(t) / price_i(t0) ), aligned by position.
+  const cutoff = Date.now() - spec.slice * 86_400_000;
+  const windowed = valid
+    .map((h) => ({ weight: h.weight, prices: h.prices.filter((p) => p[0] >= cutoff) }))
+    .filter((h) => h.prices.length >= 2);
+  const use = windowed.length ? windowed : valid;
+  const wSum = use.reduce((s, h) => s + h.weight, 0) || 1;
+  const len = Math.min(...use.map((h) => h.prices.length));
+  if (len < 2) return flat;
+  const tails = use.map((h) => h.prices.slice(h.prices.length - len));
+  const weights = use.map((h) => h.weight / wSum);
+  const base0 = tails.map((t) => t[0]![1] || 1);
+
+  const series: IndexPoint[] = [];
+  for (let i = 0; i < len; i++) {
+    let v = 0;
+    for (let k = 0; k < tails.length; k++) v += weights[k]! * (tails[k]![i]![1] / base0[k]!);
+    series.push({ t: tails[0]![i]![0], v: v * 100 });
+  }
+  const value = series[series.length - 1]!.v;
+  const changeAbs = value - 100;
+  return { name: INDEX_NAME, range, base: 100, value, changeAbs, changePct: changeAbs, series, standouts, provenance: cgProvenance() };
 }
 
 /* ── Prediction markets (Polymarket) ──────────────────────────────────── */

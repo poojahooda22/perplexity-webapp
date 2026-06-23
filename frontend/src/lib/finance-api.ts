@@ -15,6 +15,8 @@ export interface CryptoCoin {
   price: number;
   change24h: number | null;
   marketCap: number | null;
+  volume24h?: number | null;
+  rank?: number | null;
   sparkline: number[];
 }
 export interface CryptoPayload {
@@ -69,6 +71,30 @@ export interface QuotesPayload {
 }
 
 export const fetchCrypto = () => getJson<CryptoPayload>("/finance/crypto");
+// All-Exchanges leaderboard (reuses CryptoPayload; rows now carry volume24h + rank).
+export const fetchCryptoLeaderboard = () => getJson<CryptoPayload>("/finance/crypto/leaderboard");
+
+// Lumina Crypto 50 — our own cap-weighted index (NOT the licensed Coinbase 50).
+export type CryptoIndexRange = "1d" | "5d" | "1m" | "3m" | "6m" | "1y";
+export interface IndexPoint {
+  t: number;
+  v: number;
+}
+export interface CryptoIndexPayload {
+  name: string;
+  range: CryptoIndexRange;
+  base: number;
+  value: number;
+  changeAbs: number;
+  changePct: number | null;
+  series: IndexPoint[];
+  standouts: CryptoCoin[];
+  provenance: Provenance;
+  fetchedAt?: number;
+  stale?: boolean;
+}
+export const fetchCryptoIndex = (range: CryptoIndexRange = "6m") =>
+  getJson<CryptoIndexPayload>(`/finance/crypto/index?range=${range}`);
 export const fetchPredictions = () => getJson<PredictionsPayload>("/finance/predictions");
 const marketQuery = (market: Market) => (market === "in" ? "?market=in" : "");
 export const fetchIndices = (market: Market = "us") =>

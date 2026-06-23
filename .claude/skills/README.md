@@ -21,7 +21,7 @@
 
 > **You don't have to memorize trigger words.** Claude reads every skill's `description` and
 > matches the *meaning* of what you ask — say it in plain English and the right skill loads.
-> To force one, type `/skill-name` (e.g. `/finance-markets`). There are **14 skills**, not 2.
+> To force one, type `/skill-name` (e.g. `/finance-markets`). There are **17 skills**, not 2.
 
 | When you want to work on… | Just say something like… | Skill that loads |
 |---|---|---|
@@ -31,6 +31,9 @@
 | **Web search & citations (Discover)** | "the search answer", "citations / sources", "follow-up question", "Discover feed" | `research-agent` |
 | **The chat engine itself** | "the streaming engine", "add a tool", "model routing", "compaction", "the stream protocol" | `ai-sdk-agent` |
 | **Embeddings / the semantic cache** | "the answer cache", "pgvector", "embeddings", "make it real RAG", "rerank" | `rag-retrieval` |
+| **The database (Prisma / schema)** | "add a column", "a migration", "this Prisma query", "the vector column", "driver adapter" | `prisma` |
+| **Auth / Realtime (Supabase)** | "sign-in", "validate the token", "the Supabase client", "live prices over Realtime", "RLS" | `supabase` |
+| **The cache / rate limit (Upstash)** | "the cache", "Upstash", "TTL", "rate limit", "stale-while-revalidate", "a distributed lock" | `redis` |
 | **Gmail / OAuth connectors** | "connect Gmail", "the token vault", "schedule an email", "the assistant tab" | `connectors-oauth` |
 | **The Health tab** | "health news", "lab report upload", "medical disclaimer" | `health-discover` |
 | **The Academic tab** | "papers / DOIs", "OpenAlex", "scholarly search" | `academic-discover` |
@@ -77,6 +80,9 @@ names like `/perplexity_ask` are the one internal exception.)
 | `ai-sdk-agent` | The agent engine (Vercel AI SDK) | ✅ built | `streamText`/`generateText`/`generateObject`, tool loops, `stopWhen`, hooks (`withGuard`/`onStepFinish`), the runtime skills/`loadSkill` progressive-disclosure system, prompt assembly, model gateway routing, compaction, streaming/SSE wire format |
 | `research-agent` | The Discover/search vertical | ✅ built | Tavily web search, source grounding + `[n]` citations, query classification/playbooks, follow-ups, the `<ANSWER>`/`<SOURCES>` protocol, attachments/multimodal, deep-research patterns |
 | `rag-retrieval` | Embeddings + retrieval + caching | ✅ built | pgvector, the semantic-answer cache, embeddings, chunking, hybrid search, reranking, turning the cache into a real knowledge-RAG, freshness/TTL, cache invalidation |
+| [`prisma`](prisma/SKILL.md) | The database layer (Prisma 7 + Supabase Postgres) | ✅ built | the schema/models, Prisma queries, migrations, the `prisma-client` generator + `PrismaPg` adapter, the ESM `.js` gotcha, pgvector `Unsupported("vector(1536)")` + raw SQL, transactions/atomic writes, pooling, DB scale, mocking Prisma; vendors the official Prisma skills under `references/upstream/` |
+| [`supabase`](supabase/SKILL.md) | Auth + Realtime (NOT the data layer) | ✅ built | the auth-only server client + JWT validation, token cache + user provisioning, Google/GitHub OAuth, Supabase Realtime (live prices), RLS as a model, Storage/Edge Functions/RPC, the CLI, the `supabase-fake` seam |
+| [`redis`](redis/SKILL.md) | Upstash hot-cache + rate limiting | ✅ built | `@upstash/redis` REST, `cache.ts` stale-while-revalidate + in-flight de-dupe + hard-TTL, `ratelimit.ts` sliding window (fail-open), data structures, caching strategies, locks/idempotency, streams/pub-sub, key/TTL/eviction |
 | `trading-systems` | Trading/markets UX & analytics | ✅ built | charts, technical indicators, candlesticks, backtesting concepts, TradingView/Lightweight Charts, order/portfolio concepts (informational only), screeners |
 | `crypto-defi` | Crypto & on-chain | ✅ built | CoinGecko semantics, coin ids, market cap/24h, stablecoins, prediction markets, on-chain/DeFi concepts, geo-block fallbacks |
 | `connectors-oauth` | AI Connectors (Gmail etc.) | ✅ built | per-user OAuth, encrypted token vault, AI-SDK tools over a connected account, human-in-the-loop approval (`needsApproval`), scheduling via cron, Google scope/verification tiers, confused-deputy defense |
@@ -88,10 +94,13 @@ names like `/perplexity_ask` are the one internal exception.)
 | [`backend-testing`](backend-testing/SKILL.md) | Backend testing on Bun | ✅ built | `bun:test` tiered strategy; mocking Prisma/Supabase/fetch/AI-SDK; auth + conversations + finance/discover providers + streaming `/perplexity_ask` |
 | [`improvement-loop`](improvement-loop/SKILL.md) | Verifiable agentic improvement loops (meta/process) | ✅ built | running a measure→diagnose→research→plan→execute→verify loop until a mechanical metric is hit; `/loop` vs `/schedule`; verifiable exit + max-iteration safety cap + independent verifier; the Ralph-Wiggum lineage; the finance cold-fetch latency case study (9.3 s → 3 ms) |
 
-> **Status:** 14 skills built — `SKILL.md` + `references/` (116 reference docs). Four are generic
+> **Status:** 17 skills built — `SKILL.md` + `references/` (~149 reference docs). Four are generic
 > craft/process layers — `react-typescript` (React/TS), `bun-testing` (frontend tests),
 > `backend-testing` (backend tests), and `improvement-loop` (how to run a verifiable optimization loop,
-> grounded in the finance latency case study); the other 10 are Lumina-specific.
+> grounded in the finance latency case study); three are the **data-foundation** layer — `prisma`
+> (Prisma 7 + Postgres), `supabase` (auth + Realtime), `redis` (Upstash hot-cache); the other 10 are
+> Lumina-specific verticals/engine. The `prisma` skill vendors the official Prisma skills repo under
+> its `references/upstream/`.
 
 ---
 
@@ -101,6 +110,9 @@ names like `/perplexity_ask` are the one internal exception.)
 - "tool / streamText / generateObject / loadSkill / step loop / model gateway / disclaimer hook / compaction / system prompt assembly" → **ai-sdk-agent**
 - "web search / Tavily / citation / sources / follow-up / answer protocol / query type / playbook / attachment" → **research-agent**
 - "embedding / pgvector / semantic cache / RAG / retrieval / rerank / chunk / cosine distance" → **rag-retrieval**
+- "prisma / schema.prisma / migration / findMany / upsert / $queryRaw / $transaction / driver adapter / PrismaPg / vector column / generated client / DATABASE_URL" → **prisma**
+- "supabase / sign-in / auth.getUser / jwt / anon key / service role / RLS / supabase realtime / live prices / broadcast / edge function / OAuth" → **supabase**
+- "redis / upstash / cache / TTL / stale-while-revalidate / rate limit / sliding window / thundering herd / stampede / distributed lock / idempotency / getOrRefresh" → **redis**
 - "candlestick / indicator / RSI / MACD / backtest / TradingView / Lightweight Charts / screener" → **trading-systems**
 - "CoinGecko / bitcoin / ethereum / coin id / market cap / DeFi / on-chain / Polymarket / Manifold / prediction market" → **crypto-defi** (data plumbing also in **finance-markets**)
 - "OAuth / Gmail / connector / token vault / needsApproval / scheduled email / Google scope / CASA audit" → **connectors-oauth**

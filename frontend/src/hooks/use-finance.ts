@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   fetchCrypto,
+  fetchCryptoIndex,
+  fetchCryptoLeaderboard,
   fetchDiscover,
   fetchIndices,
   fetchMarketSummary,
@@ -10,6 +12,7 @@ import {
   fetchSectors,
   fetchStocks,
   type Market,
+  type CryptoIndexRange,
 } from "@/lib/finance-api";
 
 // Each endpoint's cadence is tied to how often the data can actually change (and to the
@@ -39,6 +42,25 @@ export const useCrypto = () =>
     refetchInterval: TTL.crypto,
     staleTime: TTL.crypto,
     gcTime: keepAlive(TTL.crypto),
+  });
+
+export const useCryptoLeaderboard = () =>
+  useQuery({
+    queryKey: ["finance", "crypto", "leaderboard"],
+    queryFn: fetchCryptoLeaderboard,
+    refetchInterval: TTL.crypto,
+    staleTime: TTL.crypto,
+    gcTime: keepAlive(TTL.crypto),
+  });
+
+// Lumina Crypto 50 index — heavier (multi-call) + slow-moving, so a gentle 5-min cadence.
+export const useCryptoIndex = (range: CryptoIndexRange = "6m") =>
+  useQuery({
+    queryKey: ["finance", "crypto", "index", range],
+    queryFn: () => fetchCryptoIndex(range),
+    refetchInterval: 5 * MIN,
+    staleTime: 5 * MIN,
+    gcTime: keepAlive(5 * MIN),
   });
 
 export const usePredictions = () =>

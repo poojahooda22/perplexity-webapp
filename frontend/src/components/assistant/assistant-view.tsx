@@ -50,6 +50,11 @@ export function AssistantView({
   const navigate = useNavigate();
   const status = useGmailStatus();
   const gmailConnected = !!status.data?.connected;
+  // Distinguish "still loading" from "definitively not connected": while the first status fetch is
+  // in flight `status.data` is undefined, so a naive `!data?.connected` would render the new-user
+  // "Connect Gmail" state at a user who IS connected (the ~2s flash). `useGmailStatus` seeds from a
+  // persisted copy (use-connectors.ts), so returning connected users skip this entirely.
+  const statusResolved = !status.isPending;
 
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -151,7 +156,12 @@ export function AssistantView({
                   Connected
                 </span>
               ) : c.id === "gmail" ? (
-                <span className="text-xs text-muted-foreground">Connect</span>
+                // Don't assert "Connect" until status resolves, or it flashes for connected users.
+                statusResolved ? (
+                  <span className="text-xs text-muted-foreground">Connect</span>
+                ) : (
+                  <span className="h-3 w-12 animate-pulse rounded bg-muted" aria-hidden />
+                )
               ) : (
                 <span className="text-xs text-muted-foreground">Soon</span>
               )}
@@ -184,7 +194,7 @@ export function AssistantView({
               </button>
             ))}
           </div>
-        ) : (
+        ) : statusResolved ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border p-6 text-center">
             <p className="text-sm text-muted-foreground">
               Connect Gmail to ask about your inbox right here.
@@ -197,6 +207,16 @@ export function AssistantView({
               <Plus className="size-4" />
               Connect Gmail
             </button>
+          </div>
+        ) : (
+          // Status not yet known — neutral skeleton, never the new-user connect CTA.
+          <div className="flex flex-wrap items-center justify-center gap-2" aria-hidden>
+            {GMAIL_PROMPTS.map((p) => (
+              <div
+                key={p}
+                className="h-[42px] w-44 animate-pulse rounded-lg border border-border bg-muted/40"
+              />
+            ))}
           </div>
         )}
       </div>

@@ -6,7 +6,17 @@
 import { Router, type RequestHandler } from "express";
 import { getOrRefresh, forceRefresh } from "../lib/cache.js";
 import { financeRateLimit } from "../lib/ratelimit.js";
-import { fetchCrypto, fetchPredictions, fetchIndices, fetchStocks, fetchSectors, type Market } from "./sources.js";
+import {
+  fetchCrypto,
+  fetchCryptoLeaderboard,
+  fetchLuminaCrypto50,
+  fetchPredictions,
+  fetchIndices,
+  fetchStocks,
+  fetchSectors,
+  type Market,
+  type CryptoIndexRange,
+} from "./sources.js";
 import { fetchMarketSummary } from "./summary.js";
 import { fetchAllResearch } from "./research.js";
 import { fetchDiscover } from "./news.js";
@@ -15,11 +25,12 @@ export const financeRouter = Router();
 
 // Cache TTLs (seconds). Crypto/predictions move fast; stocks/indices we refresh gently to
 // stay well under Twelve Data's free 800-calls/day + 8/min limits.
-const TTL = { crypto: 30, predictions: 120, indices: 300, stocks: 300, sectors: 300, summary: 900, research: 21_600, discover: 600 };
+const TTL = { crypto: 30, predictions: 120, indices: 300, stocks: 300, sectors: 300, summary: 900, research: 21_600, discover: 600, cryptoLeaderboard: 60, crypto50: 900 };
 // Only keys read by readRoute (crypto/predictions/research) or /home (indices/stocks). The
 // market-aware routes (sectors/summary/discover) build their keys inline in marketReadRoute.
 const CACHE_KEYS = {
   crypto: "finance:crypto",
+  cryptoLeaderboard: "finance:crypto:leaderboard",
   predictions: "finance:predictions",
   indices: "finance:indices",
   stocks: "finance:stocks",
@@ -60,6 +71,20 @@ function marketReadRoute(
 }
 
 financeRouter.get("/crypto", financeRateLimit, readRoute(CACHE_KEYS.crypto, TTL.crypto, fetchCrypto));
+// All-Exchanges crypto leaderboard: top coins by 24h volume (100M+ mcap), CoinGecko aggregate.
+financeRouter.get("/crypto/leaderboard", financeRateLimit, readRoute(CACHE_KEYS.cryptoLeaderboard, TTL.cryptoLeaderboard, fetchCryptoLeaderboard));
+// Lumina Crypto 50 — our OWN cap-weighted index (NOT the licensed Coinbase 50). Range-keyed cache.
+financeRouter.get("/crypto/index", financeRateLimit, async (req, res) => {
+  const allowed: CryptoIndexRange[] = ["1d", "5d", "1m", "3m", "6m", "1y"];
+  const range = allowed.includes(req.query.range as CryptoIndexRange) ? (req.query.range as CryptoIndexRange) : "6m";
+  try {
+    const r = await getOrRefresh(`finance:crypto50:${range}`, TTL.crypto50, () => fetchLuminaCrypto50(range));
+    res.json({ ...(r.data as object), fetchedAt: r.fetchedAt, stale: r.stale });
+  } catch (e) {
+    console.error(`[finance] crypto50:${range} failed:`, e instanceof Error ? e.message : e);
+    res.status(502).json({ error: "crypto index upstream failed" });
+  }
+});
 financeRouter.get("/predictions", financeRateLimit, readRoute(CACHE_KEYS.predictions, TTL.predictions, fetchPredictions));
 // Indices + stocks are market-aware (US default, ?market=in for India).
 financeRouter.get("/indices", financeRateLimit, marketReadRoute("indices", TTL.indices, fetchIndices));
@@ -101,6 +126,10 @@ const WARM_JOBS: [string, number, () => Promise<unknown>][] = [
   ["finance:stocks", TTL.stocks, () => fetchStocks("us")],
   ["finance:sectors", TTL.sectors, () => fetchSectors("us")],
   ["finance:crypto", TTL.crypto, fetchCrypto],
+  ["finance:crypto:leaderboard", TTL.cryptoLeaderboard, fetchCryptoLeaderboard],
+  ["finance:crypto50:6m", TTL.crypto50, () => fetchLuminaCrypto50("6m")],
+  ["finance:crypto50:1d", TTL.crypto50, () => fetchLuminaCrypto50("1d")],
+  ["finance:crypto50:5d", TTL.crypto50, () => fetchLuminaCrypto50("5d")],
   ["finance:predictions", TTL.predictions, fetchPredictions],
   ["finance:summary", TTL.summary, () => fetchMarketSummary("us")],
   ["finance:research", TTL.research, fetchAllResearch],

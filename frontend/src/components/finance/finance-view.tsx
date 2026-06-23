@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, useState } from "react";
+import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowUp,
@@ -15,6 +15,8 @@ import {
 
 import {
   useCrypto,
+  useCryptoIndex,
+  useCryptoLeaderboard,
   useDiscover,
   useIndices,
   useMarketSummary,
@@ -25,6 +27,7 @@ import {
 } from "@/hooks/use-finance";
 import type {
   CryptoCoin,
+  CryptoIndexRange,
   DiscoverArticle,
   Market,
   PredictionMarket,
@@ -827,6 +830,316 @@ function CryptoGrid({ status }: { status?: LiveStatus }) {
   );
 }
 
+// ── Crypto leaderboard (All Exchanges, by 24h volume) ────────────────────
+const LEADERBOARD_PAGE_SIZE = 10;
+function CryptoLeaderboard({ status }: { status?: LiveStatus }) {
+  const { data, isLoading, isError } = useCryptoLeaderboard();
+  const [page, setPage] = useState(0);
+  const coins = data?.coins ?? [];
+  const pages = Math.max(1, Math.ceil(coins.length / LEADERBOARD_PAGE_SIZE));
+  const safePage = Math.min(page, pages - 1);
+  const start = safePage * LEADERBOARD_PAGE_SIZE;
+  const visible = coins.slice(start, start + LEADERBOARD_PAGE_SIZE);
+  return (
+    <Section
+      title="Leaderboard"
+      badge={<LiveBadge status={status} />}
+      attribution={data?.provenance.attribution}
+    >
+      <p className="-mt-1 text-xs text-muted-foreground">
+        Active coins with $100M+ market cap, across all exchanges — ranked by 24h volume.
+      </p>
+      {isLoading || isError ? (
+        <PanelState loading={isLoading} error={isError} />
+      ) : (
+        <div className="space-y-3">
+          <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="px-3 py-2.5 text-left font-medium">#</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Coin</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Price</th>
+                  <th className="px-3 py-2.5 text-right font-medium">24h</th>
+                  <th className="hidden px-3 py-2.5 text-right font-medium sm:table-cell">Vol 24H</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Market Cap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((c, i) => (
+                  <tr key={c.id} className="border-b border-border/50 last:border-0 hover:bg-accent/40">
+                    <td className="px-3 py-2.5 tabular-nums text-muted-foreground">{start + i + 1}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {c.image && <img src={c.image} alt="" className="size-5 rounded-full" />}
+                        <span className="font-medium text-foreground">{c.name}</span>
+                        <span className="text-xs uppercase text-muted-foreground">{c.symbol}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-foreground">{usd(c.price)}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex justify-end">
+                        <ChangePct value={c.change24h} />
+                      </div>
+                    </td>
+                    <td className="hidden px-3 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
+                      {c.volume24h != null ? `$${compact(c.volume24h)}` : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                      {c.marketCap != null ? `$${compact(c.marketCap)}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {pages > 1 && (
+            <div className="flex items-center justify-center gap-1.5 pt-1">
+              {Array.from({ length: pages }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPage(i)}
+                  aria-label={`Page ${i + 1}`}
+                  className={
+                    "h-1.5 rounded-full transition-all " +
+                    (i === safePage
+                      ? "w-4 bg-foreground/70"
+                      : "w-1.5 bg-muted-foreground/40 hover:bg-muted-foreground/70")
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ── Lumina Crypto 50 — our own cap-weighted index (NOT the official Coinbase 50) ──
+const INDEX_RANGES: { key: CryptoIndexRange; label: string }[] = [
+  { key: "1d", label: "1D" },
+  { key: "5d", label: "5D" },
+  { key: "1m", label: "1M" },
+  { key: "3m", label: "3M" },
+  { key: "6m", label: "6M" },
+  { key: "1y", label: "1Y" },
+];
+
+// Per-range axis + tooltip time formatting.
+function fmtAxisTime(t: number, range: CryptoIndexRange): string {
+  const d = new Date(t);
+  if (range === "1d") return d.toLocaleTimeString("en-US", { hour: "numeric" });
+  if (range === "5d") return d.toLocaleDateString("en-US", { weekday: "short" });
+  if (range === "1m" || range === "3m") return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "short" });
+}
+function fmtTooltipTime(t: number, range: CryptoIndexRange): string {
+  const d = new Date(t);
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (range === "1d" || range === "5d") {
+    return `${date}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+  }
+  return date;
+}
+
+// Hand-rolled interactive area chart (no chart lib): y/x axes, split green/red fill at the base
+// line, and a hover crosshair + tooltip. Width is measured so SVG units == screen px (crisp text +
+// accurate hover math).
+function IndexChart({ series, base, range }: { series: { t: number; v: number }[]; base: number; range: CryptoIndexRange }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const clipId = useId().replace(/:/g, "");
+  const [w, setW] = useState(720);
+  const [hi, setHi] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    setW(el.clientWidth || 720);
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0]?.contentRect;
+      if (cr && cr.width > 0) setW(cr.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const H = 256;
+  const padL = 40;
+  const padR = 12;
+  const padT = 12;
+  const padB = 24;
+  const n = series.length;
+  const plotW = Math.max(1, w - padL - padR);
+  const plotH = H - padT - padB;
+  const vs = series.map((p) => p.v);
+  const min = Math.min(...vs, base);
+  const max = Math.max(...vs, base);
+  const span = max - min || 1;
+  const xi = (i: number) => padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
+  const yv = (v: number) => padT + (1 - (v - min) / span) * plotH;
+  const baseY = yv(base);
+
+  if (n < 2) return <div ref={wrapRef} className="h-64 w-full rounded-xl bg-muted/30" />;
+
+  const line = series.map((p, i) => `${i === 0 ? "M" : "L"}${xi(i).toFixed(1)},${yv(p.v).toFixed(1)}`).join(" ");
+  const area = `${line} L${xi(n - 1).toFixed(1)},${(padT + plotH).toFixed(1)} L${padL.toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+  const yTicks = Array.from({ length: 4 }, (_, k) => min + (k / 3) * span);
+  const xCount = Math.min(6, n);
+  const xTicks = Array.from({ length: xCount }, (_, k) => Math.round((k / Math.max(1, xCount - 1)) * (n - 1)));
+
+  const onMove = (e: React.MouseEvent) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left - padL) / plotW));
+    setHi(Math.round(frac * (n - 1)));
+  };
+
+  const hp = hi != null && hi >= 0 && hi < n ? series[hi]! : null;
+  const hx = hp ? xi(hi!) : 0;
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <svg ref={svgRef} width={w} height={H} className="block select-none" onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
+        <defs>
+          <clipPath id={`a-${clipId}`}><rect x={padL} y={padT} width={plotW} height={Math.max(0, baseY - padT)} /></clipPath>
+          <clipPath id={`b-${clipId}`}><rect x={padL} y={baseY} width={plotW} height={Math.max(0, padT + plotH - baseY)} /></clipPath>
+          <linearGradient id={`up-${clipId}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgb(16 185 129)" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="rgb(16 185 129)" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id={`dn-${clipId}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgb(244 63 94)" stopOpacity="0" />
+            <stop offset="100%" stopColor="rgb(244 63 94)" stopOpacity="0.28" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((v, k) => (
+          <g key={`y${k}`}>
+            <line x1={padL} y1={yv(v)} x2={padL + plotW} y2={yv(v)} className="stroke-border/40" strokeWidth="1" />
+            <text x={padL - 6} y={yv(v) + 3} textAnchor="end" className="fill-muted-foreground text-[10px]">
+              {span > 20 ? v.toFixed(0) : v.toFixed(1)}
+            </text>
+          </g>
+        ))}
+        {xTicks.map((idx, k) => {
+          const label = fmtAxisTime(series[idx]!.t, range);
+          if (k > 0 && fmtAxisTime(series[xTicks[k - 1]!]!.t, range) === label) return null;
+          return (
+            <text key={`x${k}`} x={xi(idx)} y={H - 6} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+              {label}
+            </text>
+          );
+        })}
+        <path d={area} fill={`url(#up-${clipId})`} clipPath={`url(#a-${clipId})`} />
+        <path d={area} fill={`url(#dn-${clipId})`} clipPath={`url(#b-${clipId})`} />
+        <line x1={padL} y1={baseY} x2={padL + plotW} y2={baseY} className="stroke-border" strokeWidth="1" strokeDasharray="4 4" />
+        <path d={line} fill="none" strokeWidth="1.75" className="stroke-emerald-500" clipPath={`url(#a-${clipId})`} />
+        <path d={line} fill="none" strokeWidth="1.75" className="stroke-rose-500" clipPath={`url(#b-${clipId})`} />
+        {hp && (
+          <g>
+            <line x1={hx} y1={padT} x2={hx} y2={padT + plotH} className="stroke-foreground/30" strokeWidth="1" />
+            <circle cx={hx} cy={yv(hp.v)} r="3.5" className="fill-background stroke-foreground" strokeWidth="1.5" />
+          </g>
+        )}
+      </svg>
+      {hp && (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-lg border border-border bg-popover px-2.5 py-1.5 text-center shadow-md"
+          style={{ left: Math.min(Math.max(hx, 56), w - 56), top: Math.max(2, yv(hp.v) - 50) }}
+        >
+          <div className="text-sm font-semibold tabular-nums text-foreground">{num(hp.v)}</div>
+          <div className="text-[11px] text-muted-foreground">{fmtTooltipTime(hp.t, range)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LuminaCrypto50() {
+  const [range, setRange] = useState<CryptoIndexRange>("6m");
+  const { data, isLoading, isError } = useCryptoIndex(range);
+  const up = (data?.changePct ?? 0) >= 0;
+  return (
+    <Section title="Lumina Crypto 50" attribution={data?.provenance.attribution}>
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-semibold tabular-nums text-foreground">
+                {data ? num(data.value) : "—"}
+              </span>
+              {data && (
+                <span className={cn("text-sm font-medium tabular-nums", up ? "text-emerald-500" : "text-rose-500")}>
+                  {signed(data.changeAbs)} ({pct(data.changePct ?? 0)})
+                </span>
+              )}
+            </div>
+            <p className="mt-1 max-w-xl text-xs text-muted-foreground">
+              Lumina's own cap-weighted top-50 crypto index, indexed to 100 at the start of the range — not
+              the official Coinbase 50.{" "}
+              <a
+                href="https://www.coinbase.com/coin50"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Learn more about the Coinbase 50 Index
+              </a>
+            </p>
+          </div>
+          <div className="flex items-center gap-0.5 rounded-lg border border-border p-0.5">
+            {INDEX_RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={cn(
+                  "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  range === r.key
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-4">
+          {isLoading || isError ? (
+            <PanelState loading={isLoading} error={isError} />
+          ) : (
+            <IndexChart series={data?.series ?? []} base={data?.base ?? 100} range={range} />
+          )}
+        </div>
+      </div>
+
+      {data && data.standouts.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <h3 className="text-xs font-semibold text-foreground">Standouts</h3>
+          <p className="text-[11px] text-muted-foreground">Biggest 24h movers among the index constituents.</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {data.standouts.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 rounded-xl border border-border bg-card p-2.5">
+                {c.image && <img src={c.image} alt="" className="size-6 rounded-full" />}
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-medium text-foreground">{c.symbol}</div>
+                  <div className="text-xs tabular-nums text-muted-foreground">{usd(c.price)}</div>
+                </div>
+                <div className="ml-auto">
+                  <ChangePct value={c.change24h} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
 function PredictionsGrid() {
   const { data, isLoading, isError } = usePredictions();
   return (
@@ -1251,7 +1564,13 @@ export function FinanceView({
                   <DiscoverCarousel />
                 </>
               )}
-              {tab === "Crypto" && <CryptoGrid status={cryptoStatus} />}
+              {tab === "Crypto" && (
+                <>
+                  <CryptoGrid status={cryptoStatus} />
+                  <CryptoLeaderboard status={cryptoStatus} />
+                  <LuminaCrypto50 />
+                </>
+              )}
               {tab === "Research" && <ResearchView />}
               {tab === "Predictions" && <PredictionsGrid />}
             </main>
