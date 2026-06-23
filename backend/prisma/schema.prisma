@@ -109,3 +109,55 @@ enum AuthProvider {
   Google
 }
 
+// ── Market Insights persistence (Slice 5) ──────────────────────────────────
+
+// Daily snapshot of the Lumina Market Mood — the time-series behind "now vs last week"
+// and the input the scorecard grades. PK = date so a re-run upserts (idempotent).
+model MarketMoodReading {
+  date       DateTime @id @db.Date
+  market     String   @default("us")
+  score      Float
+  label      String
+  components Json? // mood sub-scores (floats only — JSON-safe, no BigInt)
+  asOf       DateTime @default(now())
+
+  @@map("market_mood_reading")
+}
+
+// The public track-record scorecard (the moat: "no bank shows its miss rate"). Each row is a
+// falsifiable, point-in-time house view emitted BEFORE the outcome is knowable, then graded
+// MECHANICALLY (never an LLM) against the realized index move. Misses are kept, not hidden.
+model HouseViewCall {
+  id           String        @id @default(uuid())
+  signalKey    String        @map("signal_key") // e.g. "market_mood.us"
+  market       String        @default("us")
+  claim        String
+  direction    CallDirection @default(neutral)
+  refValue     Float?        @map("ref_value") // index level at call time
+  refSymbol    String?       @map("ref_symbol") // e.g. "S&P 500"
+  madeAt       DateTime      @default(now())
+  resolveAt    DateTime      @map("resolve_at")
+  status       CallStatus    @default(open)
+  outcomeValue Float?        @map("outcome_value")
+  correct      Boolean?
+  resolvedAt   DateTime?
+  notes        String?
+
+  @@index([signalKey, market, status])
+  @@index([resolveAt, status]) // resolver worklist: status=open AND resolveAt<=now
+  @@index([madeAt]) // scorecard newest-first
+  @@map("house_view_call")
+}
+
+enum CallDirection {
+  bullish
+  bearish
+  neutral
+}
+
+enum CallStatus {
+  open
+  resolved
+  void
+}
+

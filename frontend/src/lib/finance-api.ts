@@ -161,3 +161,116 @@ export interface DiscoverPayload {
 }
 export const fetchDiscover = (market: Market = "us") =>
   getJson<DiscoverPayload>(`/finance/discover${marketQuery(market)}`);
+
+/* ── Market Insights ("Pulse") — GREEN public-domain surfaces ──────────── */
+
+export interface RecessionPayload {
+  probability: number;
+  probabilityPct: number;
+  spread10y3m: number;
+  spread10y2y: number;
+  yields: { m3: number; y2: number; y10: number };
+  curveInverted: boolean;
+  sahm: { value: number; triggered: boolean; latestUnemployment: number; asOf: string } | null;
+  asOf: string;
+  methodology: string;
+  caveat: string;
+  provenance: Provenance;
+  fetchedAt?: number;
+  stale?: boolean;
+}
+export const fetchRecession = () => getJson<RecessionPayload>("/finance/recession");
+
+export interface SentimentPoint {
+  t: number;
+  v: number;
+}
+export interface SentimentPayload {
+  market: Market;
+  score: number; // -100..+100
+  label: string;
+  toneLatest: number;
+  toneSeries: SentimentPoint[];
+  buzz: number; // 0..100
+  buzzSeries: SentimentPoint[];
+  caveat: string;
+  provenance: Provenance;
+  fetchedAt?: number;
+  stale?: boolean;
+}
+export const fetchGdelt = (market: Market = "us") =>
+  getJson<SentimentPayload>(`/finance/gdelt${marketQuery(market)}`);
+
+export interface MoodComponent {
+  name: string;
+  score: number; // 0..100
+  note: string;
+}
+export interface MoodPayload {
+  market: Market;
+  score: number; // 0..100
+  label: string;
+  components: MoodComponent[];
+  asOf: string;
+  caveat: string;
+  provenance: Provenance;
+  fetchedAt?: number;
+  stale?: boolean;
+}
+export const fetchMood = (market: Market = "us") =>
+  getJson<MoodPayload>(`/finance/mood${marketQuery(market)}`);
+
+export interface BriefingLevel {
+  asset: string;
+  level: number;
+  change: number | null;
+  changePct: number | null;
+}
+export interface BriefingSource {
+  n: number;
+  title: string;
+  url: string;
+}
+export interface BriefingPayload {
+  market: Market;
+  columnist: string;
+  generatedAt: string;
+  marketTake: { mood: string; headline: string; body: string };
+  bottomLine: string;
+  whatMoved: { driver: string; why: string }[];
+  sentimentRead: string;
+  catalysts: { event: string; note: string }[];
+  onInvestorsMinds: { question: string; take: string }[];
+  followUps: string[];
+  levels: BriefingLevel[];
+  mood: { score: number; label: string } | null;
+  recession: { probabilityPct: number; spread10y3m: number } | null;
+  sentiment: { label: string; score: number } | null;
+  sources: BriefingSource[];
+  provenance: Provenance;
+  fetchedAt?: number;
+  stale?: boolean;
+}
+export const fetchBriefing = (market: Market = "us") =>
+  getJson<BriefingPayload>(`/finance/briefing${marketQuery(market)}`);
+
+export interface ScorecardCall {
+  id: string;
+  claim: string;
+  direction: string;
+  status: string;
+  correct: boolean | null;
+  madeAt: string;
+  resolveAt: string;
+  resolvedAt: string | null;
+  notes: string | null;
+}
+export interface ScorecardPayload {
+  signalKey: string;
+  summary: { total: number; resolved: number; correct: number; hitRate: number | null; open: number };
+  calls: ScorecardCall[];
+  moodHistory: { date: string; score: number; label: string }[];
+  fetchedAt?: number;
+  stale?: boolean;
+}
+export const fetchScorecard = () => getJson<ScorecardPayload>("/finance/scorecard");

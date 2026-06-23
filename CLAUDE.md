@@ -5,6 +5,14 @@
 > right dev-skill and states the cross-cutting rules. It is loaded on every prompt; the skills it
 > points to are loaded on demand.
 
+## Harness — the project's Claude setup
+The full map of this repo's Claude Code harness (router · skills · repo-wiki · **rules** · **memory** ·
+**hooks** · commands · agents) is [`.claude/HARNESS.md`](.claude/HARNESS.md). New since the harness build:
+in-repo team memory ([`.claude/memory/`](.claude/memory/MEMORY.md), incl. the licensing
+[`sources-ledger`](.claude/memory/sources-ledger.md)), surfaced operating rules
+([`.claude/rules/`](.claude/rules/README.md)), and SessionStart + PreToolUse-licensing hooks
+([`.claude/hooks/`](.claude/hooks/README.md)). Commands: `/sources-lint`, `/harness-check`.
+
 ## Brand rule (always)
 The product is **Lumina**. **Never** write "Perplexity" in user-visible text or new prose. The only
 exception is pre-existing internal API route names like `/perplexity_ask`.

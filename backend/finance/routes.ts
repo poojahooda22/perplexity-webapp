@@ -20,12 +20,15 @@ import {
 import { fetchMarketSummary } from "./summary.js";
 import { fetchAllResearch } from "./research.js";
 import { fetchDiscover } from "./news.js";
+import { fetchRecessionGauge, fetchNewsSentiment, fetchMarketMood } from "./sentiment-sources.js";
+import { generateBriefing } from "./briefing.js";
+import { emitDailyCalls, resolveDueCalls, getScorecard } from "./scorecard.js";
 
 export const financeRouter = Router();
 
 // Cache TTLs (seconds). Crypto/predictions move fast; stocks/indices we refresh gently to
 // stay well under Twelve Data's free 800-calls/day + 8/min limits.
-const TTL = { crypto: 30, predictions: 120, indices: 300, stocks: 300, sectors: 300, summary: 900, research: 21_600, discover: 600, cryptoLeaderboard: 60, crypto50: 900 };
+const TTL = { crypto: 30, predictions: 120, indices: 300, stocks: 300, sectors: 300, summary: 900, research: 21_600, discover: 600, cryptoLeaderboard: 60, crypto50: 900, recession: 21_600, gdelt: 3_600, mood: 3_600, briefing: 1_800 };
 // Only keys read by readRoute (crypto/predictions/research) or /home (indices/stocks). The
 // market-aware routes (sectors/summary/discover) build their keys inline in marketReadRoute.
 const CACHE_KEYS = {
@@ -98,6 +101,26 @@ financeRouter.get("/research", financeRateLimit, readRoute(CACHE_KEYS.research, 
 // Discover news carousel — US: Finnhub /news; India (?market=in): Tavily India-publisher search.
 financeRouter.get("/discover", financeRateLimit, marketReadRoute("discover", TTL.discover, fetchDiscover));
 
+// ── Market Insights ("Pulse") — GREEN public-domain surfaces (commercialOk:true). ──
+// Recession panel = US Treasury curve + BLS Sahm + Estrella–Mishkin probit (US-only macro).
+financeRouter.get("/recession", financeRateLimit, readRoute("finance:recession", TTL.recession, fetchRecessionGauge));
+// News sentiment ("Bull/Bear Buzz") — GDELT tone/volume; market-aware (US default, ?market=in).
+financeRouter.get("/gdelt", financeRateLimit, marketReadRoute("gdelt", TTL.gdelt, fetchNewsSentiment));
+// Lumina Market Mood — GREEN-only macro-sentiment composite; market-aware.
+financeRouter.get("/mood", financeRateLimit, marketReadRoute("mood", TTL.mood, fetchMarketMood));
+// The Daily Briefing ("The Lumina Tape") — LLM-backed, grounded on the GREEN gauges + cited news.
+financeRouter.get("/briefing", financeRateLimit, marketReadRoute("briefing", TTL.briefing, generateBriefing));
+// The public track-record scorecard (cheap, indexed DB read → always fresh, no cache so an
+// emit/resolve is reflected immediately).
+financeRouter.get("/scorecard", financeRateLimit, async (_req, res) => {
+  try {
+    res.json({ ...(await getScorecard()), fetchedAt: Date.now(), stale: false });
+  } catch (e) {
+    console.error("[finance] scorecard failed:", e instanceof Error ? e.message : e);
+    res.status(502).json({ error: "scorecard failed" });
+  }
+});
+
 // Aggregate landing payload — one request powers the whole Finance home.
 financeRouter.get("/home", financeRateLimit, async (_req, res) => {
   const [indices, stocks, crypto, predictions] = await Promise.allSettled([
@@ -134,6 +157,12 @@ const WARM_JOBS: [string, number, () => Promise<unknown>][] = [
   ["finance:summary", TTL.summary, () => fetchMarketSummary("us")],
   ["finance:research", TTL.research, fetchAllResearch],
   ["finance:discover", TTL.discover, () => fetchDiscover("us")],
+  // Market Insights (US). Mood reuses the recession+gdelt caches via in-flight de-dupe, so
+  // warming all three hits each upstream ~once even though they run concurrently here.
+  ["finance:recession", TTL.recession, fetchRecessionGauge],
+  ["finance:gdelt", TTL.gdelt, () => fetchNewsSentiment("us")],
+  ["finance:mood", TTL.mood, () => fetchMarketMood("us")],
+  ["finance:briefing", TTL.briefing, () => generateBriefing("us")],
   ["finance:in:indices", TTL.indices, () => fetchIndices("in")],
   ["finance:in:stocks", TTL.stocks, () => fetchStocks("in")],
   ["finance:in:sectors", TTL.sectors, () => fetchSectors("in")],
@@ -159,4 +188,33 @@ financeRouter.post("/cron/refresh", async (req, res) => {
     if (provided !== secret) return res.status(401).json({ error: "unauthorised" });
   }
   res.json({ refreshed: await warmFinanceCache() });
+});
+
+// Scorecard crons — emit a daily falsifiable call from the mood, and resolve calls past their horizon.
+// Same CRON_SECRET guard as the warmer (skipped if unset = open in local dev).
+function cronOk(req: Parameters<RequestHandler>[0]): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  const auth = req.headers["authorization"];
+  const bearer = typeof auth === "string" ? auth.replace(/^Bearer\s+/i, "") : undefined;
+  const provided = bearer || (req.headers["x-cron-secret"] as string | undefined);
+  return provided === secret;
+}
+financeRouter.post("/cron/emit-calls", async (req, res) => {
+  if (!cronOk(req)) return res.status(401).json({ error: "unauthorised" });
+  try {
+    res.json(await emitDailyCalls());
+  } catch (e) {
+    console.error("[finance] emit-calls failed:", e instanceof Error ? e.message : e);
+    res.status(500).json({ error: "emit failed" });
+  }
+});
+financeRouter.post("/cron/resolve-calls", async (req, res) => {
+  if (!cronOk(req)) return res.status(401).json({ error: "unauthorised" });
+  try {
+    res.json(await resolveDueCalls());
+  } catch (e) {
+    console.error("[finance] resolve-calls failed:", e instanceof Error ? e.message : e);
+    res.status(500).json({ error: "resolve failed" });
+  }
 });

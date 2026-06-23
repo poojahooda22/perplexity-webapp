@@ -1,5 +1,31 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Loading Lumina harness…",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/precheck-licensing.mjs\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

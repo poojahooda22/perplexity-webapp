@@ -14,13 +14,18 @@ import {
 } from "lucide-react";
 
 import {
+  useBriefing,
+  useScorecard,
   useCrypto,
   useCryptoIndex,
   useCryptoLeaderboard,
   useDiscover,
+  useGdelt,
   useIndices,
   useMarketSummary,
+  useMood,
   usePredictions,
+  useRecession,
   useResearch,
   useSectors,
   useStocks,
@@ -46,7 +51,7 @@ import { AttachButton, AttachmentPreviews, MAX_ATTACHMENTS } from "@/components/
 import { useLivePrices, type LiveStatus } from "@/hooks/use-live-prices";
 import { cn } from "@/lib/utils";
 
-const SECTION_TABS = ["Crypto", "Research", "Predictions"] as const;
+const SECTION_TABS = ["Insights", "Crypto", "Research", "Predictions"] as const;
 type Tab = "Markets" | (typeof SECTION_TABS)[number];
 
 /* ── formatting ───────────────────────────────────────────────────────── */
@@ -1265,6 +1270,538 @@ function ResearchView() {
   );
 }
 
+/* ── Market Insights ("Pulse") — GREEN public-domain surfaces ─────────── */
+
+// "Updated N min ago" from the payload's fetchedAt; prefixes "stale ·" honestly on degradation.
+function freshness(fetchedAt?: number, stale?: boolean): string | undefined {
+  if (!fetchedAt) return undefined;
+  const mins = Math.floor((Date.now() - fetchedAt) / 60_000);
+  const label = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)}h ago`;
+  return `${stale ? "stale · " : ""}updated ${label}`;
+}
+
+function Disclaimer() {
+  return (
+    <p className="mt-2 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+      Informational only — not financial advice.
+    </p>
+  );
+}
+
+// Per-datum provenance line: GREEN dot = our own commercial-display-clean series, AMBER = attribute/link-out.
+function ProvenanceLine({ p }: { p: { source: string; commercialOk: boolean; attribution: string } }) {
+  return (
+    <div className="mt-3 flex items-center gap-2 border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
+      <span
+        title={p.commercialOk ? "Public-domain / cleared for display" : "Attribution / link-out only"}
+        className={cn("inline-block size-1.5 shrink-0 rounded-full", p.commercialOk ? "bg-emerald-500" : "bg-amber-500")}
+      />
+      <span className="truncate">{p.attribution}</span>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={cn("text-lg font-semibold tabular-nums", warn ? "text-rose-500" : "text-foreground")}>{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}
+
+// ── Mood gauge (CNN-Fear&Greed-style half-dial) ──
+const MOOD_BANDS = [
+  { from: 0, to: 25, color: "#ef4444" },
+  { from: 25, to: 45, color: "#f97316" },
+  { from: 45, to: 55, color: "#9ca3af" },
+  { from: 55, to: 75, color: "#84cc16" },
+  { from: 75, to: 100, color: "#16a34a" },
+];
+// Map 0..100 → a point on a top semicircle (v=0 → left, v=100 → right).
+function gaugePoint(cx: number, cy: number, r: number, v: number) {
+  const a = Math.PI * (1 - Math.max(0, Math.min(100, v)) / 100);
+  return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a) };
+}
+function gaugeArc(cx: number, cy: number, r: number, v1: number, v2: number) {
+  const p1 = gaugePoint(cx, cy, r, v1);
+  const p2 = gaugePoint(cx, cy, r, v2);
+  return `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+}
+function Gauge({ value }: { value: number }) {
+  const cx = 110;
+  const cy = 110;
+  const r = 88;
+  const needle = gaugePoint(cx, cy, r - 16, value);
+  return (
+    <svg viewBox="0 0 220 124" className="w-full max-w-[260px]" role="img" aria-label={`Market mood ${value} of 100`}>
+      {MOOD_BANDS.map((b) => (
+        <path key={b.from} d={gaugeArc(cx, cy, r, b.from, b.to)} fill="none" stroke={b.color} strokeWidth={13} />
+      ))}
+      <line x1={cx} y1={cy} x2={needle.x} y2={needle.y} className="stroke-foreground" strokeWidth={3} strokeLinecap="round" />
+      <circle cx={cx} cy={cy} r={5} className="fill-foreground" />
+    </svg>
+  );
+}
+function moodColor(score: number): string {
+  if (score < 25) return "text-rose-500";
+  if (score < 45) return "text-orange-500";
+  if (score <= 55) return "text-muted-foreground";
+  if (score < 75) return "text-lime-500";
+  return "text-emerald-500";
+}
+
+function MoodDial({ market }: { market: Market }) {
+  const { data, isLoading, isError } = useMood(market);
+  return (
+    <Section title="Lumina Market Mood" attribution={data ? freshness(data.fetchedAt, data.stale) : undefined}>
+      {isLoading || isError || !data ? (
+        <PanelState loading={isLoading} error={isError || (!isLoading && !data)} />
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex flex-col items-center">
+            <Gauge value={data.score} />
+            <div className="-mt-0 text-center">
+              <div className="text-3xl font-semibold tabular-nums text-foreground">{data.score}</div>
+              <div className={cn("text-sm font-medium", moodColor(data.score))}>{data.label}</div>
+            </div>
+          </div>
+          <div className="mt-5 space-y-2.5">
+            {data.components.map((c) => (
+              <div key={c.name} className="flex items-center gap-3">
+                <span className="w-28 shrink-0 text-xs text-muted-foreground">{c.name}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                  <div className="h-full rounded-full bg-foreground/60" style={{ width: `${c.score}%` }} />
+                </div>
+                <span className="w-36 shrink-0 truncate text-right text-[11px] text-muted-foreground" title={c.note}>
+                  {c.note}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">{data.caveat}</p>
+          <ProvenanceLine p={data.provenance} />
+          <Disclaimer />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function RecessionPanel() {
+  const { data, isLoading, isError } = useRecession();
+  return (
+    <Section title="Recession Risk" attribution={data ? freshness(data.fetchedAt, data.stale) : undefined}>
+      {isLoading || isError || !data ? (
+        <PanelState loading={isLoading} error={isError || (!isLoading && !data)} />
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="text-4xl font-semibold tabular-nums text-foreground">{data.probabilityPct}%</div>
+              <div className="max-w-[16rem] text-xs text-muted-foreground">
+                probability of a US recession within 12 months
+              </div>
+            </div>
+            <div className="flex gap-5">
+              <Stat
+                label="10y–3m"
+                value={`${data.spread10y3m > 0 ? "+" : ""}${data.spread10y3m}`}
+                sub="pp"
+                warn={data.curveInverted}
+              />
+              <Stat
+                label="10y–2y"
+                value={`${data.spread10y2y > 0 ? "+" : ""}${data.spread10y2y}`}
+                sub="pp"
+                warn={data.spread10y2y < 0}
+              />
+              {data.sahm && (
+                <Stat
+                  label="Sahm"
+                  value={data.sahm.value.toFixed(2)}
+                  sub={data.sahm.triggered ? "TRIGGERED" : "no trigger"}
+                  warn={data.sahm.triggered}
+                />
+              )}
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span>3M {data.yields.m3.toFixed(2)}%</span>
+            <span>2Y {data.yields.y2.toFixed(2)}%</span>
+            <span>10Y {data.yields.y10.toFixed(2)}%</span>
+            {data.sahm && (
+              <span className="sm:ml-auto">
+                U-3 {data.sahm.latestUnemployment}% · {data.sahm.asOf}
+              </span>
+            )}
+          </div>
+          <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">{data.caveat}</p>
+          <ProvenanceLine p={data.provenance} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function sentColor(score: number): string {
+  if (score <= -15) return "text-rose-500";
+  if (score < 15) return "text-muted-foreground";
+  return "text-emerald-500";
+}
+
+function BuzzCard({ market }: { market: Market }) {
+  const { data, isLoading, isError } = useGdelt(market);
+  const toneUp = data && data.toneSeries.length >= 2
+    ? data.toneSeries[data.toneSeries.length - 1]!.v >= data.toneSeries[0]!.v
+    : true;
+  return (
+    <Section title="Bull / Bear Buzz" attribution={data ? freshness(data.fetchedAt, data.stale) : undefined}>
+      {isLoading || isError || !data ? (
+        <PanelState loading={isLoading} error={isError || (!isLoading && !data)} />
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">News sentiment</div>
+              <div className={cn("text-2xl font-semibold", sentColor(data.score))}>{data.label}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Buzz</div>
+              <div className="text-2xl font-semibold tabular-nums text-foreground">
+                {data.buzz}
+                <span className="text-sm text-muted-foreground">/100</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="relative h-2 rounded-full bg-gradient-to-r from-rose-500/70 via-secondary to-emerald-500/70">
+              <div
+                className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground"
+                style={{ left: `${(data.score + 100) / 2}%` }}
+              />
+            </div>
+            <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+              <span>Bearish</span>
+              <span>Neutral</span>
+              <span>Bullish</span>
+            </div>
+          </div>
+          {data.toneSeries.length >= 2 && (
+            <div className="mt-3">
+              <Sparkline points={data.toneSeries.map((p) => p.v)} up={toneUp} />
+            </div>
+          )}
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">{data.caveat}</p>
+          <ProvenanceLine p={data.provenance} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// Renders briefing prose with inline [n] citations turned into clickable superscript source links.
+function CitedText({ text, sources }: { text: string; sources: { n: number; url: string }[] }) {
+  const parts = text.split(/(\[\d+\])/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        const m = p.match(/^\[(\d+)\]$/);
+        if (!m) return <span key={i}>{p}</span>;
+        const n = Number(m[1]);
+        const src = sources.find((s) => s.n === n);
+        if (!src) return <sup key={i} className="text-muted-foreground">{n}</sup>;
+        return (
+          <a
+            key={i}
+            href={src.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mx-0.5 inline-flex items-center rounded bg-secondary px-1 align-super text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {n}
+          </a>
+        );
+      })}
+    </>
+  );
+}
+
+function BriefBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function moodPillColor(mood: string): string {
+  if (mood === "risk-on" || mood === "euphoric") return "bg-emerald-500/10 text-emerald-500";
+  if (mood === "risk-off" || mood === "cautious") return "bg-rose-500/10 text-rose-500";
+  return "bg-amber-500/10 text-amber-500";
+}
+
+function BriefingCard({ market }: { market: Market }) {
+  const { data, isLoading, isError } = useBriefing(market);
+  return (
+    <Section
+      title="The Lumina Tape — Daily Briefing"
+      attribution={data ? freshness(data.fetchedAt, data.stale) : undefined}
+    >
+      {isLoading ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-4 py-8 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Writing today’s briefing — first load takes a moment…
+        </div>
+      ) : isError || !data ? (
+        <PanelState loading={false} error />
+      ) : (
+        <article className="space-y-5 rounded-2xl border border-border bg-card p-5 sm:p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                moodPillColor(data.marketTake.mood),
+              )}
+            >
+              {data.marketTake.mood}
+            </span>
+            {data.mood && (
+              <span className="text-[11px] text-muted-foreground">
+                Mood {data.mood.score}/100 · {data.mood.label}
+              </span>
+            )}
+            {data.recession && (
+              <span className="text-[11px] text-muted-foreground">· Recession {data.recession.probabilityPct}%</span>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xl font-semibold tracking-tight text-foreground">{data.marketTake.headline}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-foreground/80">
+              <CitedText text={data.marketTake.body} sources={data.sources} />
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-border/70 bg-secondary/40 p-3 text-sm text-foreground/90">
+            <span className="font-semibold">Bottom line — </span>
+            <CitedText text={data.bottomLine} sources={data.sources} />
+          </div>
+
+          {data.levels.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {data.levels.map((l) => (
+                <div key={l.asset} className="rounded-xl border border-border bg-background/40 p-3">
+                  <div className="truncate text-[11px] text-muted-foreground">{l.asset}</div>
+                  <div className="text-base font-semibold tabular-nums text-foreground">{num(l.level)}</div>
+                  <ChangePct value={l.changePct} />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <BriefBlock title="What moved & why">
+            <ul className="space-y-2.5">
+              {data.whatMoved.map((w, i) => (
+                <li key={i} className="text-sm">
+                  <span className="font-medium text-foreground">{w.driver}. </span>
+                  <span className="text-foreground/80">
+                    <CitedText text={w.why} sources={data.sources} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </BriefBlock>
+
+          <BriefBlock title="Sentiment read">
+            <p className="text-sm text-foreground/80">
+              <CitedText text={data.sentimentRead} sources={data.sources} />
+            </p>
+          </BriefBlock>
+
+          <BriefBlock title="Catalysts to watch">
+            <ul className="space-y-1.5">
+              {data.catalysts.map((c, i) => (
+                <li key={i} className="flex gap-2 text-sm">
+                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/60" />
+                  <span>
+                    <span className="font-medium text-foreground">{c.event}</span> —{" "}
+                    <span className="text-foreground/75">
+                      <CitedText text={c.note} sources={data.sources} />
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </BriefBlock>
+
+          <BriefBlock title="On investors’ minds">
+            <div className="space-y-3">
+              {data.onInvestorsMinds.map((q, i) => (
+                <div key={i}>
+                  <div className="text-sm font-medium text-foreground">{q.question}</div>
+                  <p className="mt-0.5 text-sm text-foreground/75">
+                    <CitedText text={q.take} sources={data.sources} />
+                  </p>
+                </div>
+              ))}
+            </div>
+          </BriefBlock>
+
+          {data.followUps.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {data.followUps.map((f, i) => (
+                <span
+                  key={i}
+                  className="rounded-full border border-border bg-background/40 px-3 py-1 text-xs text-muted-foreground"
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {data.sources.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/60 pt-3">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Sources</span>
+              {data.sources.slice(0, 8).map((s) => (
+                <a
+                  key={s.n}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <img
+                    src={faviconFromUrl(s.url)}
+                    alt=""
+                    className="size-3.5 rounded"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                  {s.n}. {hostname(s.url)}
+                </a>
+              ))}
+            </div>
+          )}
+
+          <ProvenanceLine p={data.provenance} />
+          <Disclaimer />
+        </article>
+      )}
+    </Section>
+  );
+}
+
+function callStatusBadge(c: { status: string; correct: boolean | null }) {
+  if (c.status === "open") return { label: "Open", cls: "bg-amber-500/10 text-amber-500" };
+  if (c.correct === true) return { label: "Hit", cls: "bg-emerald-500/10 text-emerald-500" };
+  if (c.correct === false) return { label: "Miss", cls: "bg-rose-500/10 text-rose-500" };
+  return { label: c.status, cls: "bg-secondary text-muted-foreground" };
+}
+
+function ScorecardCard() {
+  const { data, isLoading, isError } = useScorecard();
+  return (
+    <Section title="Track Record" attribution={data ? freshness(data.fetchedAt, data.stale) : undefined}>
+      {isLoading || isError || !data ? (
+        <PanelState loading={isLoading} error={isError || (!isLoading && !data)} />
+      ) : (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              {data.summary.hitRate != null ? (
+                <>
+                  <div className="text-4xl font-semibold tabular-nums text-foreground">{data.summary.hitRate}%</div>
+                  <div className="text-xs text-muted-foreground">
+                    Market-Mood call hit rate — {data.summary.correct} of {data.summary.resolved} resolved
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-semibold text-foreground">Establishing track record</div>
+                  <div className="max-w-sm text-xs text-muted-foreground">
+                    {data.summary.open} open call{data.summary.open === 1 ? "" : "s"} — none resolved yet. Hits and
+                    misses will both appear here as the horizon passes.
+                  </div>
+                </>
+              )}
+            </div>
+            {data.moodHistory.length >= 2 && (
+              <div className="w-40">
+                <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Mood history</div>
+                <Sparkline
+                  points={data.moodHistory.map((m) => m.score)}
+                  up={data.moodHistory[data.moodHistory.length - 1]!.score >= data.moodHistory[0]!.score}
+                />
+              </div>
+            )}
+          </div>
+
+          {data.calls.length > 0 ? (
+            <div className="mt-4 divide-y divide-border/60">
+              {data.calls.slice(0, 8).map((c) => {
+                const b = callStatusBadge(c);
+                return (
+                  <div key={c.id} className="flex items-start gap-3 py-2.5">
+                    <span className={cn("mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase", b.cls)}>
+                      {b.label}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-foreground/90">{c.claim}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {new Date(c.madeAt).toLocaleDateString()} →{" "}
+                        {c.status === "open"
+                          ? `resolves ${new Date(c.resolveAt).toLocaleDateString()}`
+                          : (c.notes ?? "resolved")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              No calls logged yet — the first is emitted on the next daily cycle.
+            </p>
+          )}
+
+          <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+            Every Market-Mood call is logged <span className="font-medium text-foreground/80">before</span> the outcome
+            is known and graded mechanically against the S&P 500 — hits{" "}
+            <span className="font-medium text-foreground/80">and misses</span> both shown. No bank publishes its own
+            miss rate.
+          </p>
+          <Disclaimer />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function MarketInsightsView() {
+  const market = useMarket();
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        A free, AI-native read on the market — built only from public-domain data (U.S. Treasury, BLS, GDELT) plus
+        cited news. Every figure is sourced and dated; nothing here is financial advice.
+      </p>
+      <BriefingCard market={market} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <MoodDial market={market} />
+        <div className="space-y-6">
+          <RecessionPanel />
+          <BuzzCard market={market} />
+        </div>
+      </div>
+      <ScorecardCard />
+    </div>
+  );
+}
+
 /* ── right sidebar ────────────────────────────────────────────────────── */
 
 // US equities trade 09:30–16:00 ET, Mon–Fri. Holidays aren't accounted for, but that's
@@ -1597,6 +2134,7 @@ export function FinanceView({
 
           <div className="mt-6 flex gap-6">
             <main className="min-w-0 flex-1 space-y-8">
+              {tab === "Insights" && <MarketInsightsView />}
               {tab === "Markets" && (
                 <>
                   <TopAssets />

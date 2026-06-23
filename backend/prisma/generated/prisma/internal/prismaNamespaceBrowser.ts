@@ -55,7 +55,9 @@ export const ModelName = {
   Conversation: 'Conversation',
   CachedQuery: 'CachedQuery',
   Message: 'Message',
-  GmailConnection: 'GmailConnection'
+  GmailConnection: 'GmailConnection',
+  MarketMoodReading: 'MarketMoodReading',
+  HouseViewCall: 'HouseViewCall'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -137,6 +139,38 @@ export const GmailConnectionScalarFieldEnum = {
 export type GmailConnectionScalarFieldEnum = (typeof GmailConnectionScalarFieldEnum)[keyof typeof GmailConnectionScalarFieldEnum]
 
 
+export const MarketMoodReadingScalarFieldEnum = {
+  date: 'date',
+  market: 'market',
+  score: 'score',
+  label: 'label',
+  components: 'components',
+  asOf: 'asOf'
+} as const
+
+export type MarketMoodReadingScalarFieldEnum = (typeof MarketMoodReadingScalarFieldEnum)[keyof typeof MarketMoodReadingScalarFieldEnum]
+
+
+export const HouseViewCallScalarFieldEnum = {
+  id: 'id',
+  signalKey: 'signalKey',
+  market: 'market',
+  claim: 'claim',
+  direction: 'direction',
+  refValue: 'refValue',
+  refSymbol: 'refSymbol',
+  madeAt: 'madeAt',
+  resolveAt: 'resolveAt',
+  status: 'status',
+  outcomeValue: 'outcomeValue',
+  correct: 'correct',
+  resolvedAt: 'resolvedAt',
+  notes: 'notes'
+} as const
+
+export type HouseViewCallScalarFieldEnum = (typeof HouseViewCallScalarFieldEnum)[keyof typeof HouseViewCallScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -150,6 +184,14 @@ export const JsonNullValueInput = {
 } as const
 
 export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
+export const NullableJsonNullValueInput = {
+  DbNull: DbNull,
+  JsonNull: JsonNull
+} as const
+
+export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
 export const QueryMode = {

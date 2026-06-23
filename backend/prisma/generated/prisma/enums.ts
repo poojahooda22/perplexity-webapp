@@ -23,3 +23,21 @@ export const AuthProvider = {
 } as const
 
 export type AuthProvider = (typeof AuthProvider)[keyof typeof AuthProvider]
+
+
+export const CallDirection = {
+  bullish: 'bullish',
+  bearish: 'bearish',
+  neutral: 'neutral'
+} as const
+
+export type CallDirection = (typeof CallDirection)[keyof typeof CallDirection]
+
+
+export const CallStatus = {
+  open: 'open',
+  resolved: 'resolved',
+  void: 'void'
+} as const
+
+export type CallStatus = (typeof CallStatus)[keyof typeof CallStatus]

@@ -66,3 +66,13 @@ export type Message = Prisma.MessageModel
  * 
  */
 export type GmailConnection = Prisma.GmailConnectionModel
+/**
+ * Model MarketMoodReading
+ * 
+ */
+export type MarketMoodReading = Prisma.MarketMoodReadingModel
+/**
+ * Model HouseViewCall
+ * 
+ */
+export type HouseViewCall = Prisma.HouseViewCallModel

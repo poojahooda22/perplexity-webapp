@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+  engineType = "client"
+  runtime = "nodejs"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String        @id          @default(uuid())
+  email      String        @unique
+  name       String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  provider    AuthProvider
+  supabaseId  String
+  conversations Conversation[]
+  gmailConnection GmailConnection?
+}
+
+model Conversation {
+  id              String          @id  @default(uuid())
+  title           String?
+  slug            String
+  userId          String
+  createdAt       DateTime        @default(now())
+  messages        Message[]
+  user            User           @relation(fields: [userId], references: [id])
+}
+
+model CachedQuery {
+  id        String                      @id @default(uuid())
+  queryText String                      @map("query_text")
+  model     String
+  embedding Unsupported("vector(1536)")
+  answer    String
+  sources   Json
+  images    Json
+  createdAt DateTime                    @default(now())       @map("created_at")
+
+  @@map("cached_query")
+}
+
+model Message {
+  id             Int          @id        @default(autoincrement())
+  content        String
+  role           MessageRole
+  conversation   Conversation         @relation(fields: [conversationId], references: [id])
+  conversationId String
+  createdId      DateTime           @default(now())
+}
+
+model GmailConnection {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  googleEmail     String   @map("google_email")
+  refreshTokenEnc String   @map("refresh_token_enc")
+  iv              String
+  authTag         String   @map("auth_tag")
+  scopes          String
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gmail_connection")
+}
+
+enum MessageRole {
+  user
+  Assistant
+}
+
+enum AuthProvider {
+  Github
+  Google
+}

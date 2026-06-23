@@ -388,7 +388,9 @@ export const ModelName = {
   Conversation: 'Conversation',
   CachedQuery: 'CachedQuery',
   Message: 'Message',
-  GmailConnection: 'GmailConnection'
+  GmailConnection: 'GmailConnection',
+  MarketMoodReading: 'MarketMoodReading',
+  HouseViewCall: 'HouseViewCall'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -404,7 +406,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "conversation" | "cachedQuery" | "message" | "gmailConnection"
+    modelProps: "user" | "conversation" | "cachedQuery" | "message" | "gmailConnection" | "marketMoodReading" | "houseViewCall"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -762,6 +764,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    MarketMoodReading: {
+      payload: Prisma.$MarketMoodReadingPayload<ExtArgs>
+      fields: Prisma.MarketMoodReadingFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MarketMoodReadingFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MarketMoodReadingFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>
+        }
+        findFirst: {
+          args: Prisma.MarketMoodReadingFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MarketMoodReadingFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>
+        }
+        findMany: {
+          args: Prisma.MarketMoodReadingFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>[]
+        }
+        create: {
+          args: Prisma.MarketMoodReadingCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>
+        }
+        createMany: {
+          args: Prisma.MarketMoodReadingCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MarketMoodReadingCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>[]
+        }
+        delete: {
+          args: Prisma.MarketMoodReadingDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>
+        }
+        update: {
+          args: Prisma.MarketMoodReadingUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>
+        }
+        deleteMany: {
+          args: Prisma.MarketMoodReadingDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MarketMoodReadingUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MarketMoodReadingUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>[]
+        }
+        upsert: {
+          args: Prisma.MarketMoodReadingUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MarketMoodReadingPayload>
+        }
+        aggregate: {
+          args: Prisma.MarketMoodReadingAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMarketMoodReading>
+        }
+        groupBy: {
+          args: Prisma.MarketMoodReadingGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MarketMoodReadingGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MarketMoodReadingCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MarketMoodReadingCountAggregateOutputType> | number
+        }
+      }
+    }
+    HouseViewCall: {
+      payload: Prisma.$HouseViewCallPayload<ExtArgs>
+      fields: Prisma.HouseViewCallFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.HouseViewCallFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.HouseViewCallFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>
+        }
+        findFirst: {
+          args: Prisma.HouseViewCallFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.HouseViewCallFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>
+        }
+        findMany: {
+          args: Prisma.HouseViewCallFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>[]
+        }
+        create: {
+          args: Prisma.HouseViewCallCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>
+        }
+        createMany: {
+          args: Prisma.HouseViewCallCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.HouseViewCallCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>[]
+        }
+        delete: {
+          args: Prisma.HouseViewCallDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>
+        }
+        update: {
+          args: Prisma.HouseViewCallUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>
+        }
+        deleteMany: {
+          args: Prisma.HouseViewCallDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.HouseViewCallUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.HouseViewCallUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>[]
+        }
+        upsert: {
+          args: Prisma.HouseViewCallUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HouseViewCallPayload>
+        }
+        aggregate: {
+          args: Prisma.HouseViewCallAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateHouseViewCall>
+        }
+        groupBy: {
+          args: Prisma.HouseViewCallGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.HouseViewCallGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.HouseViewCallCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.HouseViewCallCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -864,6 +1014,38 @@ export const GmailConnectionScalarFieldEnum = {
 export type GmailConnectionScalarFieldEnum = (typeof GmailConnectionScalarFieldEnum)[keyof typeof GmailConnectionScalarFieldEnum]
 
 
+export const MarketMoodReadingScalarFieldEnum = {
+  date: 'date',
+  market: 'market',
+  score: 'score',
+  label: 'label',
+  components: 'components',
+  asOf: 'asOf'
+} as const
+
+export type MarketMoodReadingScalarFieldEnum = (typeof MarketMoodReadingScalarFieldEnum)[keyof typeof MarketMoodReadingScalarFieldEnum]
+
+
+export const HouseViewCallScalarFieldEnum = {
+  id: 'id',
+  signalKey: 'signalKey',
+  market: 'market',
+  claim: 'claim',
+  direction: 'direction',
+  refValue: 'refValue',
+  refSymbol: 'refSymbol',
+  madeAt: 'madeAt',
+  resolveAt: 'resolveAt',
+  status: 'status',
+  outcomeValue: 'outcomeValue',
+  correct: 'correct',
+  resolvedAt: 'resolvedAt',
+  notes: 'notes'
+} as const
+
+export type HouseViewCallScalarFieldEnum = (typeof HouseViewCallScalarFieldEnum)[keyof typeof HouseViewCallScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -877,6 +1059,14 @@ export const JsonNullValueInput = {
 } as const
 
 export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
+export const NullableJsonNullValueInput = {
+  DbNull: DbNull,
+  JsonNull: JsonNull
+} as const
+
+export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
 export const QueryMode = {
@@ -1007,6 +1197,41 @@ export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, '
 export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
 
+
+/**
+ * Reference to a field of type 'CallDirection'
+ */
+export type EnumCallDirectionFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CallDirection'>
+    
+
+
+/**
+ * Reference to a field of type 'CallDirection[]'
+ */
+export type ListEnumCallDirectionFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CallDirection[]'>
+    
+
+
+/**
+ * Reference to a field of type 'CallStatus'
+ */
+export type EnumCallStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CallStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'CallStatus[]'
+ */
+export type ListEnumCallStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'CallStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
 /**
  * Batch Payload for updateMany & deleteMany & createMany
  */
@@ -1122,6 +1347,8 @@ export type GlobalOmitConfig = {
   cachedQuery?: Prisma.CachedQueryOmit
   message?: Prisma.MessageOmit
   gmailConnection?: Prisma.GmailConnectionOmit
+  marketMoodReading?: Prisma.MarketMoodReadingOmit
+  houseViewCall?: Prisma.HouseViewCallOmit
 }
 
 /* Types for Logging */
