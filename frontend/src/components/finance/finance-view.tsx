@@ -894,21 +894,27 @@ function CryptoLeaderboard({ status }: { status?: LiveStatus }) {
             </table>
           </div>
           {pages > 1 && (
-            <div className="flex items-center justify-center gap-1.5 pt-1">
-              {Array.from({ length: pages }).map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setPage(i)}
-                  aria-label={`Page ${i + 1}`}
-                  className={
-                    "h-1.5 rounded-full transition-all " +
-                    (i === safePage
-                      ? "w-4 bg-foreground/70"
-                      : "w-1.5 bg-muted-foreground/40 hover:bg-muted-foreground/70")
-                  }
-                />
-              ))}
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <CarouselButton onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} label="Previous coins">
+                <ChevronLeft className="size-4" />
+              </CarouselButton>
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: pages }).map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setPage(i)}
+                    aria-label={`Page ${i + 1}`}
+                    className={cn(
+                      "h-1.5 rounded-full transition-all",
+                      i === safePage ? "w-4 bg-foreground/70" : "w-1.5 bg-muted-foreground/40 hover:bg-muted-foreground/70",
+                    )}
+                  />
+                ))}
+              </div>
+              <CarouselButton onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={safePage === pages - 1} label="Next coins">
+                <ChevronRight className="size-4" />
+              </CarouselButton>
             </div>
           )}
         </div>
@@ -1261,8 +1267,29 @@ function ResearchView() {
 
 /* ── right sidebar ────────────────────────────────────────────────────── */
 
-function LiveBadge({ status }: { status?: LiveStatus }) {
-  const label = status === "live" ? "Live" : status === "idle" ? "Idle" : "—";
+// US equities trade 09:30–16:00 ET, Mon–Fri. Holidays aren't accounted for, but that's
+// harmless: on a holiday no ticks flow, so the badge reads "Closed" anyway — which is correct.
+function isUsMarketOpenNow(): boolean {
+  const et = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 9 * 60 + 30 && mins < 16 * 60;
+}
+
+// `idle` means "connected, but no ticks right now". For 24/7 crypto that's a rare glitch, so
+// the default label is "Idle". The stock watchlist passes idleLabel="Closed" while the US
+// market is shut — far clearer than a bare "Idle", and still honest (we never fake "Live").
+function LiveBadge({
+  status,
+  idleLabel = "Idle",
+  idleTitle = "Connected, but no ticks right now (e.g. market closed)",
+}: {
+  status?: LiveStatus;
+  idleLabel?: string;
+  idleTitle?: string;
+}) {
+  const label = status === "live" ? "Live" : status === "idle" ? idleLabel : "—";
   const dot =
     status === "live"
       ? "bg-emerald-500 animate-pulse"
@@ -1273,7 +1300,7 @@ function LiveBadge({ status }: { status?: LiveStatus }) {
     status === "live"
       ? "Live — receiving real-time ticks"
       : status === "idle"
-        ? "Connected, but no ticks right now (e.g. market closed)"
+        ? idleTitle
         : "Not connected";
   return (
     <span
@@ -1287,12 +1314,26 @@ function LiveBadge({ status }: { status?: LiveStatus }) {
 }
 
 function WatchlistAside({ status }: { status?: LiveStatus }) {
-  const { data, isLoading, isError } = useStocks(useMarket());
+  const market = useMarket();
+  const { data, isLoading, isError } = useStocks(market);
+  // US stocks only tick during market hours; while it's shut, "Closed" is clearer than "Idle".
+  // India quotes are delayed (no live worker feed), so they read "Idle" with a delayed-data note.
+  const closed = market === "us" && !isUsMarketOpenNow();
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Watchlist</h3>
-        <LiveBadge status={status} />
+        <LiveBadge
+          status={status}
+          idleLabel={market === "us" ? (closed ? "Closed" : "Idle") : "Delayed"}
+          idleTitle={
+            market === "us"
+              ? closed
+                ? "US market is closed — showing the last close. Live ticks resume at the opening bell."
+                : "Connected — waiting for the next trade."
+              : "India quotes are delayed (no live feed)."
+          }
+        />
       </div>
       {data?.needsKey ? (
         <p className="text-xs text-muted-foreground">
