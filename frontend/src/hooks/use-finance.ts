@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import {
   fetchCrypto,
@@ -58,6 +58,10 @@ export const useCryptoIndex = (range: CryptoIndexRange = "6m") =>
   useQuery({
     queryKey: ["finance", "crypto", "index", range],
     queryFn: () => fetchCryptoIndex(range),
+    // Keep the current chart visible while switching ranges (no error/empty flash on a cold range),
+    // and retry transient CoinGecko rate-limits a couple times.
+    placeholderData: keepPreviousData,
+    retry: 2,
     refetchInterval: 5 * MIN,
     staleTime: 5 * MIN,
     gcTime: keepAlive(5 * MIN),
