@@ -1,0 +1,92 @@
+{
+  "_meta": {
+    "purpose": "Calibration test set for the output-quality-judge. Each case has a known-correct verdict. Used by calibrate.mjs to detect drift in the deterministic pre-filter (Stage 1) and the LLM judge (Stage 2).",
+    "last_calibrated": "2026-05-04",
+    "tier_grading_basis": ".agents/audits/claude-harness-audit-2026-05-01T09-45-00Z.md"
+  },
+  "cases": [
+    {
+      "id": "pass-tier-A-grounded",
+      "expectedVerdict": "pass",
+      "expectedTier": "A",
+      "user_prompt": "what's wrong with this shader?",
+      "assistant_response": "Line 47 of `lib/r3f-compositor/materials/VoronoiStarsMaterial.ts` outputs `fragColor.a = scene.a` but VoronoiStars is emissive — by R08, emissive shaders must use `fragColor.a = max(scene.a, luminance)` to extend coverage past upstream alpha. The exact incident is cited in R08: a prior implementation propagated mask alpha=0 from upstream sim layers, so toggling those layers off made the stars invisible. One-line fix at the fragColor write site.",
+      "rationale": "Tier A — names file:line, R-rule, mechanism (alpha contract), and the incident. Surgical."
+    },
+    {
+      "id": "revise-junior-as-senior-buzzwords",
+      "expectedVerdict": "revise",
+      "expectedTier": "C",
+      "user_prompt": "how should we approach the compositor refactor?",
+      "assistant_response": "This is a complex architectural concern around the rendering pipeline that requires a thoughtful approach to maintain scalability surface. The fundamental issue lies in the synchronization boundary between the compositor and the downstream consumer. We should implement a robust solution that addresses these concerns holistically.",
+      "rationale": "Tier C — pure buzzwords without a single file/line/R-rule/mechanism. Section 8.5 question 3 fail across multiple terms: architectural concern, scalability surface, synchronization boundary, robust solution, fundamental issue."
+    },
+    {
+      "id": "revise-hallucinated-rule-number",
+      "expectedVerdict": "revise",
+      "expectedTier": "C",
+      "user_prompt": "should I delete this file?",
+      "assistant_response": "No — per R47 (file-dispatch protocol) the file at `lib/compiler-v5/stages/synthesize.ts` is load-bearing for the compiler. Removing it would break R52 (autosave OCC contract). Keep it and add a comment explaining the dependency.",
+      "rationale": "R-rules end at R36; R47 and R52 are hallucinated. Compiler V5 does not exist (V3 production, V4 quarantined per R01). Three hallucinations in one response = automatic revise."
+    },
+    {
+      "id": "revise-hallucinated-file-path",
+      "expectedVerdict": "revise",
+      "expectedTier": "C",
+      "user_prompt": "where does the FX socket dispatch happen?",
+      "assistant_response": "FX socket dispatch lives in `lib/r3f-compositor/FBOCompositorV2.tsx` line 1571. It dispatches over three node classes per R26.",
+      "rationale": "FBOCompositorV2.tsx is not a real path per R23 — the file is FBOCompositor.tsx; the 'V2' is spec-version shorthand. Hallucinated path."
+    },
+    {
+      "id": "pass-short-direct-correct",
+      "expectedVerdict": "pass",
+      "expectedTier": "A",
+      "user_prompt": "did pulseGrid get retired?",
+      "assistant_response": "Yes — moved to `lib/primitives/definitions/_retired/pulseGrid.ts` per the May-3 retire pass. Confirmed in toolbarGroups.ts comment block.",
+      "rationale": "Brief answer with two grounded specifics. CLAUDE.md §13 explicitly endorses brevity when the truth is short."
+    },
+    {
+      "id": "revise-padding-no-grounding",
+      "expectedVerdict": "revise",
+      "expectedTier": "C",
+      "user_prompt": "review the audio driver code",
+      "assistant_response": "## Summary\n\nLet me provide a comprehensive review of the audio driver implementation.\n\n## 1. Architecture Overview\n\nThe audio driver uses a sophisticated event-driven architecture with proper separation of concerns. This is a thoughtful approach.\n\n## 2. Performance Considerations\n\nThere are some performance considerations worth noting. The implementation handles edge cases reasonably well.\n\n## 3. Code Quality\n\nThe code quality is generally high with good adherence to industry standards.\n\n## 4. Recommendations\n\nWe recommend continued maintenance and gradual improvements over time.\n\n## 5. Conclusion\n\nOverall this is a solid implementation that should serve the project well.",
+      "rationale": "Padding city. Five numbered sections, zero file references, zero R-rule citations, zero specifics, zero mechanism. Section 8.5 question 6 (padding) + question 1 (junior as senior) + question 5 (cosmetics over substance)."
+    },
+    {
+      "id": "skip-engineered-prompt",
+      "expectedVerdict": "pass",
+      "expectedTier": null,
+      "expectedSkip": "engineered-prompt",
+      "user_prompt": "fix the bug",
+      "assistant_response": "✦ Engineered Prompt ✦\n\n**Intent:** Fix the bug.\n**Scope:** etc.\n\n♠♠ Awaiting confirmation, CAPTAIN RED 🫡",
+      "rationale": "Engineered prompt block awaiting confirmation. Per skip rules, this is calibrated as low-information — judge skips."
+    },
+    {
+      "id": "skip-tool-status-echo",
+      "expectedVerdict": "pass",
+      "expectedTier": null,
+      "expectedSkip": "tool-status-echo",
+      "user_prompt": "start the dev server",
+      "assistant_response": "Ready in 2.5s on http://localhost:3000.",
+      "rationale": "Pure tool-status echo. Skip."
+    },
+    {
+      "id": "pass-tier-A-with-incident-cite",
+      "expectedVerdict": "pass",
+      "expectedTier": "A",
+      "user_prompt": "should we touch the FX-socket dispatch?",
+      "assistant_response": "Be careful — R22 + R26 form a pair contract. The May-2 incident class (commits `6a2c396e` and `24cdc6ad`) introduced regressions twice when bundled autosave commits stripped the dispatch sites. Both `renderFxChainNodePass` and CASE M in `lib/r3f-compositor/FBOCompositor.tsx` need the `uExtendCoverage` write per emissive primitive. Read R22 before any edit and check `motionTracking.ts` as the canonical example.",
+      "rationale": "Tier A — names rules by number, names commits, names files and functions, cites incident date and class. Survivable rebuttal from another veteran."
+    },
+    {
+      "id": "revise-pretending-to-have-read",
+      "expectedVerdict": "revise",
+      "expectedTier": "B",
+      "requiresLLM": true,
+      "user_prompt": "what's the SDK runtime budget?",
+      "assistant_response": "The SDK runtime budget is around 30-35 KB gzipped. This is configured in the esbuild config and enforced through a CI check that fails the build if the bundle exceeds the limit. The tree-shaking strategy ensures unused primitives don't ship.",
+      "rationale": "Mostly correct shape but the 25KB target per R14 / sdk-runtime-architecture skill is hallucinated as 30-35KB. Tier B because the framing is right but the load-bearing number is wrong. Only catchable by an LLM with knowledge of the actual budget — deterministic pre-filter cannot detect numeric hallucination."
+    }
+  ]
+}

@@ -10,8 +10,8 @@ citations straight to the source — before grepping.** Conventions: [WIKI.md](W
 ## Features — "what is this vertical & how is it wired"
 - [discover-search](features/discover-search.md) — the default web-grounded chat + Discover feeds (health geo-filter, 20 image-only cards, right-sized academic tiles).
   cites: backend/index.ts, prompt.ts, discover/routes.ts, discover/health.ts, discover/shared.ts, frontend/.../discover-parts.tsx | fresh: 2026-06-24
-- [finance](features/finance.md) — cached `/finance/*` reads + the agentic finance chat + live prices.
-  cites: backend/finance/*, worker/index.ts, components/finance/finance-view.tsx | fresh: 2026-06-22
+- [finance](features/finance.md) — cached `/finance/*` reads + the agentic finance chat + live prices + the LLM-surface freeze/conditional-warm cost controls.
+  cites: backend/finance/*, backend/lib/cache.ts, worker/index.ts, components/finance/finance-view.tsx | fresh: 2026-06-24
 - [connectors-gmail](features/connectors-gmail.md) — Gmail OAuth + token vault + read-only assistant tools.
   cites: backend/connectors/gmail/*, index.ts, pages/Connectors.tsx | fresh: 2026-06-22
 
@@ -20,12 +20,12 @@ citations straight to the source — before grepping.** Conventions: [WIKI.md](W
   cites: backend/index.ts, auth.ts, prompt.ts, lib/wire.ts | fresh: 2026-06-22
 - [connector-oauth-flow](flows/connector-oauth-flow.md) — Gmail PKCE OAuth + **the post-connect → Assistant-tab navigation fix**.
   cites: connectors/gmail/*, crypto.ts, pages/Dashboard.tsx | fresh: 2026-06-22
-- [finance-quote-flow](flows/finance-quote-flow.md) — home card vs agent `getQuote`, cache + budget.
-  cites: finance/{routes,sources,tools}.ts, lib/cache.ts | fresh: 2026-06-22
+- [finance-quote-flow](flows/finance-quote-flow.md) — home card vs agent `getQuote`, cache + budget (+ LLM-freeze cost note).
+  cites: finance/{routes,sources,tools}.ts, lib/cache.ts | fresh: 2026-06-24
 
 ## Entities — "where does X live" reference
-- [routes](entities/routes.md) — the full HTTP route table → handler file:line.
-  cites: index.ts, finance/routes.ts, discover/routes.ts, connectors/gmail/routes.ts | fresh: 2026-06-22
+- [routes](entities/routes.md) — the full HTTP route table → handler file:line (incl. Market Insights reads + `?force=1` cron).
+  cites: index.ts, finance/routes.ts, discover/routes.ts, connectors/gmail/routes.ts | fresh: 2026-06-24
 - [wire-protocol](entities/wire-protocol.md) — the streaming contract (raw text + tagged tail, NOT SSE frames).
   cites: lib/wire.ts, index.ts, frontend/lib/api.ts, chat-view.tsx | fresh: 2026-06-22
 - [ai-tools-registry](entities/ai-tools-registry.md) — every AI-SDK tool (finance + gmail) → factory.
@@ -52,6 +52,7 @@ citations straight to the source — before grepping.** Conventions: [WIKI.md](W
 - [0003-news-headline-linkout-only](decisions/0003-news-headline-linkout-only.md) — drop publisher body text.
 - [0004-us-india-no-new-providers](decisions/0004-us-india-no-new-providers.md) — switcher rides existing stack.
 - [0005-discover-global-excludes-india-origin](decisions/0005-discover-global-excludes-india-origin.md) — global Health feed drops India-origin; 20 image-only cards + backfill.
+- [0006-freeze-llm-surfaces-no-new-cache-table](decisions/0006-freeze-llm-surfaces-no-new-cache-table.md) — `FINANCE_LLM_FROZEN` + conditional warmer in the existing Redis cache; rejected a new pgvector/Postgres cache table.
 
 ## Glossary
 - [glossary](glossary.md) — project vocabulary (wire tail, loadSkill, playbook, provenance, compaction…).

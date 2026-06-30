@@ -10,20 +10,20 @@ cites:
   - backend/index.ts
   - frontend/src/hooks/use-finance.ts
   - frontend/src/lib/finance-api.ts
-fresh: 2026-06-22
+fresh: 2026-06-24
 ---
 
 # Finance quote flow — two distinct paths
 
 ## A) Home watchlist card (US stocks)
 `finance-view.tsx` `useStocks("us")` (`use-finance.ts:62`) → `fetchStocks("us")` (`finance-api.ts:76`) →
-`GET /finance/stocks` → `marketReadRoute("stocks", 300, fetchStocks)` (`routes.ts:66`) →
-`getOrRefresh("finance:stocks", 300, fetchStocks)` (`backend/lib/cache.ts:73` — returns cached if <300s,
-else fetches; in-flight de-dupe + serve-stale-on-error at `cache.ts:104`) → `fetchStocks("us")`
+`GET /finance/stocks` → `marketReadRoute("stocks", TTL.stocks, fetchStocks)` (`routes.ts:96`) →
+`getOrRefresh("finance:stocks", 300, fetchStocks)` (`backend/lib/cache.ts:106` — returns cached if <300s,
+else fetches; in-flight de-dupe + serve-stale-on-error at `cache.ts:133`) → `fetchStocks("us")`
 (`sources.ts:411`) reads `TWELVE_DATA_API_KEY` (`twelveKey()` `:428`), calls Twelve Data `/quote` (`:430`),
 parses via `parseTdQuote` (`:398`) → `{ items, provenance: tdProvenance() (commercialOk:false),
 currency:"USD" }`. No key → `{ items:[], needsKey:true }` (`:429`). Route appends `fetchedAt`/`stale`
-(`routes.ts:54`) → rendered as cards.
+(`routes.ts:68`) → rendered as cards.
 
 ## B) Agent quote (user asks the chat "price of MSFT")
 `/perplexity_ask` with `vertical:"finance"` → `streamFinanceAnswer` (`backend/index.ts:152`) →
@@ -40,3 +40,9 @@ result and never invents numbers** (`FINANCE_PERSONA`, `prompt.ts:160` — see
 The finance chat **bypasses the semantic cache and pre-search** (`index.ts:498-499`). Live in-card price
 updates come separately from [useLivePrices via Supabase Realtime](../entities/frontend-hooks.md), fed by
 `worker/index.ts`. See [finance](../features/finance.md) and [providers](../entities/market-data-providers.md).
+
+**Cost note (LLM reads).** The credit-bearing reads (summary/research/briefing) ride the same
+`getOrRefresh` but are flagged `{ llm: true }`, so `FINANCE_LLM_FROZEN` can serve them from cache without
+regenerating (`cache.ts:118`) and the warmer skips them when frozen/fresh (`warmIfStale`, `cache.ts:163`).
+See [features/finance § cost control](../features/finance.md) and
+[ADR 0006](../decisions/0006-freeze-llm-surfaces-no-new-cache-table.md).

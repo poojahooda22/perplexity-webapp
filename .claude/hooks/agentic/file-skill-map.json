@@ -1,0 +1,11 @@
+{
+  "_comment": "Project-local file -> skill/rule dispatch map for file-dispatch.mjs. Each entry in `map` fires when an Edit/Write targets a path matching `pattern` (a JS regex source, matched case-insensitively against the forward-slashed path). `skills` are invoked; `rules` are file names under .claude/rules-topical/ to read first. This file is DATA: edit it per project. Empty `map` = the hook is a no-op. Delete the `_examples` key or copy entries into `map` to activate them.",
+  "map": [],
+  "_examples": [
+    { "pattern": "backend/finance/.*\\.ts$", "skills": ["/finance-markets"], "rules": ["scalability.md", "performance.md"] },
+    { "pattern": "(schema\\.prisma|prisma/)", "skills": ["/prisma"], "rules": ["scalability.md"] },
+    { "pattern": "\\.(test|spec)\\.(ts|tsx)$", "skills": ["/testing-verification"], "rules": [] },
+    { "pattern": "(auth|middleware)\\.(ts|tsx)$", "skills": ["/security-architecture"], "rules": [] },
+    { "pattern": "frontend/src/.*\\.tsx$", "skills": ["/lumina-frontend", "/react-typescript"], "rules": ["performance.md"] }
+  ]
+}

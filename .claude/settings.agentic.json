@@ -1,0 +1,118 @@
+{
+  "_README": "INERT WIRING TEMPLATE — not active. This is the FULL hooks block with the portable agentic engine wired in, MERGED on top of this repo's existing hooks (session-start, precheck-licensing, wiki-freshness). To turn the agentic brain ON: review, then copy this `hooks` block into .claude/settings.json (replacing its `hooks` key). To turn it OFF: revert settings.json. Every agentic hook is additive + fail-open except `Stop:agentic-brain-stop` which can pause a turn at most once per session (double loop-guarded). The optional output-quality JUDGE (hooks/judge) is intentionally NOT wired here — it calls an LLM on every Stop; add it only deliberately. Node must be on PATH (these are .mjs run via node, like precheck-licensing.mjs).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Loading Lumina harness…",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Bootstrapping agentic brain…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-bootstrap.mjs\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Matching skills to your prompt…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/prompt-intelligence.mjs\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Bridging AGENTS.md learned sections…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agents-md-bridge.mjs\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Injecting agentic brain…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain.mjs\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/precheck-licensing.mjs\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Checking file→skill mapping…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/file-dispatch.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Agentic tool gate…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-tooluse.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Agentic result check…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-toolresult.mjs\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Checking repo-wiki freshness…",
+            "command": "c=$(git status --porcelain -- backend frontend/src worker 2>/dev/null); w=$(git status --porcelain -- .claude/repo-wiki 2>/dev/null); if [ -n \"$c\" ] && [ -z \"$w\" ]; then printf '%s\\n' '{\"systemMessage\":\"\\ud83d\\udcdd Code changed but .claude/repo-wiki/ was not updated. Consider /wiki-ingest to keep the repo map current (or commit if this code is already mapped).\"}'; fi"
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Verify-before-done check…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-stop.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+---
+description: Portable agent harness — operating standard + skill dispatch (always on)
+alwaysApply: true
+---
+
+# Agentic harness (always on)
+
+This repo runs a portable agent harness under `.claude/`. The full cross-tool
+manual is [AGENTS.md](../../AGENTS.md); the project router is
+[CLAUDE.md](../../CLAUDE.md). Read both for anything project-specific.
+
+## Always
+
+- **Invoke the most specific skill(s) BEFORE writing code.** Skills under
+  `.claude/skills/` carry project conventions your training data lacks. Match the
+  most specific; invoke 2–3 per task. See
+  [`.claude/rules-topical/skill-dispatch.md`](../../.claude/rules-topical/skill-dispatch.md).
+- **Senior-agent discipline.** Non-trivial work is iterative: gather context →
+  act through a tool → verify → stop only when the goal is genuinely met. Answer
+  before acting. No hacks. Verify before "done".
+- **Confirm before big/irreversible work** (multi-file change, migration,
+  push/PR, shared-contract change): restate intent + a short plan first.
+- **Always-on constraints** live in [`.claude/rules/`](../../.claude/rules/);
+  on-demand deep dives in [`.claude/rules-topical/`](../../.claude/rules-topical/).

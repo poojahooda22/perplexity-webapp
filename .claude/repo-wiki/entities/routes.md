@@ -8,7 +8,7 @@ cites:
   - backend/connectors/gmail/routes.ts
   - backend/auth.ts
   - backend/lib/ratelimit.ts
-fresh: 2026-06-22
+fresh: 2026-06-24
 ---
 
 # HTTP route table
@@ -33,21 +33,32 @@ Global CORS/preflight (OPTIONS→204) at `backend/index.ts:42`. **There is no `/
 
 Per-user rate limit on the ask endpoints: `createRateLimiter(20, 60_000)` (`backend/index.ts:76`).
 
-## Finance — `app.use("/finance", financeRouter)` (`backend/index.ts:65`); router `backend/finance/routes.ts:14`
+## Finance — `app.use("/finance", financeRouter)` (`backend/index.ts:65`); router `backend/finance/routes.ts:27`
+**LLM** = a Vercel-AI-Gateway-credit-bearing read flagged `{llm:true}` (freezable via `FINANCE_LLM_FROZEN`;
+see [features/finance § cost control](../features/finance.md)). All reads served from cache via `getOrRefresh`.
 | Method | Path | Auth | Handler |
 |---|---|---|---|
-| GET | `/finance/crypto` | IP-RL | `routes.ts:62` → `fetchCrypto` |
-| GET | `/finance/predictions` | IP-RL | `routes.ts:63` → `fetchPredictions` |
-| GET | `/finance/indices` | IP-RL | `routes.ts:65` → `fetchIndices` (market-aware) |
-| GET | `/finance/stocks` | IP-RL | `routes.ts:66` → `fetchStocks` |
-| GET | `/finance/sectors` | IP-RL | `routes.ts:68` → `fetchSectors` |
-| GET | `/finance/summary` | IP-RL | `routes.ts:70` → `fetchMarketSummary` |
-| GET | `/finance/research` | IP-RL | `routes.ts:72` → `fetchAllResearch` |
-| GET | `/finance/discover` | IP-RL | `routes.ts:74` → `fetchDiscover` |
-| GET | `/finance/home` | IP-RL | `routes.ts:77` (aggregate landing payload) |
-| POST | `/finance/cron/refresh` | `CRON_SECRET` (skipped if unset) | `routes.ts:96` |
+| GET | `/finance/crypto` | IP-RL | `routes.ts:78` → `fetchCrypto` |
+| GET | `/finance/crypto/leaderboard` | IP-RL | `routes.ts:80` → `fetchCryptoLeaderboard` |
+| GET | `/finance/crypto/index` | IP-RL | `routes.ts:82` → `fetchLuminaCrypto50` (range-keyed) |
+| GET | `/finance/predictions` | IP-RL | `routes.ts:93` → `fetchPredictions` |
+| GET | `/finance/indices` | IP-RL | `routes.ts:95` → `fetchIndices` (market-aware) |
+| GET | `/finance/stocks` | IP-RL | `routes.ts:96` → `fetchStocks` |
+| GET | `/finance/sectors` | IP-RL | `routes.ts:98` → `fetchSectors` |
+| GET | `/finance/summary` | IP-RL | `routes.ts:101` → `fetchMarketSummary` · **LLM** |
+| GET | `/finance/research` | IP-RL | `routes.ts:103` → `fetchAllResearch` · **LLM** |
+| GET | `/finance/discover` | IP-RL | `routes.ts:105` → `fetchDiscover` |
+| GET | `/finance/recession` | IP-RL | `routes.ts:109` → `fetchRecessionGauge` (Market Insights, GREEN) |
+| GET | `/finance/gdelt` | IP-RL | `routes.ts:111` → `fetchNewsSentiment` (market-aware) |
+| GET | `/finance/mood` | IP-RL | `routes.ts:113` → `fetchMarketMood` (market-aware) |
+| GET | `/finance/briefing` | IP-RL | `routes.ts:115` → `generateBriefing` · **LLM** |
+| GET | `/finance/scorecard` | IP-RL | `routes.ts:118` (uncached DB read — emits show immediately) |
+| GET | `/finance/home` | IP-RL | `routes.ts:128` (aggregate landing payload) |
+| POST | `/finance/cron/refresh` | `CRON_SECRET` (skipped if unset) | `routes.ts:192` · `?force=1` regenerates even fresh/frozen |
+| POST | `/finance/cron/emit-calls` | `CRON_SECRET` (skipped if unset) | `routes.ts:215` (scorecard: emit daily call) |
+| POST | `/finance/cron/resolve-calls` | `CRON_SECRET` (skipped if unset) | `routes.ts:224` (scorecard: resolve due calls) |
 
-`?market=in` selects India (Yahoo), else US (`routes.ts:50`). The finance **chat** has no `/finance` route —
+`?market=in` selects India (Yahoo), else US (`routes.ts:64`). The finance **chat** has no `/finance` route —
 it runs through `/perplexity_ask` with `vertical:"finance"` (`backend/index.ts:501`).
 
 ## Discover (health/academic) — `app.use("/discover", discoverRouter)` (`backend/index.ts:68`); router `backend/discover/routes.ts:14`

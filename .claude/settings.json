@@ -9,6 +9,40 @@
             "timeout": 10,
             "statusMessage": "Loading Lumina harness…",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Bootstrapping agentic brain…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-bootstrap.mjs\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Matching skills to your prompt…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/prompt-intelligence.mjs\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Bridging AGENTS.md learned sections…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agents-md-bridge.mjs\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Injecting agentic brain…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain.mjs\""
           }
         ]
       }
@@ -22,6 +56,39 @@
             "shell": "bash",
             "timeout": 10,
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/precheck-licensing.mjs\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Checking file→skill mapping…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/file-dispatch.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Agentic tool gate…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-tooluse.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 3,
+            "statusMessage": "Agentic result check…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-toolresult.mjs\""
           }
         ]
       }
@@ -35,6 +102,13 @@
             "timeout": 10,
             "statusMessage": "Checking repo-wiki freshness…",
             "command": "c=$(git status --porcelain -- backend frontend/src worker 2>/dev/null); w=$(git status --porcelain -- .claude/repo-wiki 2>/dev/null); if [ -n \"$c\" ] && [ -z \"$w\" ]; then printf '%s\\n' '{\"systemMessage\":\"\\ud83d\\udcdd Code changed but .claude/repo-wiki/ was not updated. Consider /wiki-ingest to keep the repo map current (or commit if this code is already mapped).\"}'; fi"
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 5,
+            "statusMessage": "Verify-before-done check…",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/agentic/agentic-brain-stop.mjs\""
           }
         ]
       }

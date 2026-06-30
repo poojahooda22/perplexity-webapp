@@ -1,0 +1,551 @@
+{
+  "schemaVersion": 1,
+  "description": "Calibration test cases for the /consolidate-memory script. Each case spins up a sandbox memory directory under os.tmpdir(), seeds it from the `fixtures` block, runs the script with the named subcommand+args, then asserts on exit code, stdout/stderr substrings, and on-disk file state. Fixtures are drawn from real Rare.lab terminology so keyword overlap and citation-grep tests behave realistically.",
+  "scriptUnderTest": ".claude/scripts/consolidate-memory.mjs",
+  "envOverride": "RARE_MEMORY_DIR",
+  "archiveEnvOverride": "RARE_MEMORY_ARCHIVE_DIR",
+  "citationScanEnvOverride": "RARE_MEMORY_CITATION_ROOTS",
+  "taxonomy": {
+    "types": ["user", "feedback", "project", "reference"],
+    "tiers": ["episodic", "semantic", "procedural", "core"],
+    "typeToTier": {
+      "user": "core",
+      "feedback": "episodic",
+      "project": "semantic",
+      "reference": "procedural"
+    }
+  },
+  "fixtures": {
+    "memoryFiles": [
+      {
+        "filename": "user_profile.md",
+        "frontmatter": {
+          "name": "Captain Red",
+          "description": "Founder and product visionary. Designer who verifies output visually. Address as Red.",
+          "type": "user",
+          "tier": "core",
+          "importance": 10,
+          "protected": true,
+          "keywords": ["captain", "red", "founder", "designer"],
+          "tags": ["identity"],
+          "links": [],
+          "created": "2026-03-15T00:00:00Z",
+          "last_accessed": "2026-05-04T00:00:00Z",
+          "access_count": 42
+        },
+        "body": "Captain Red is the founder and product visionary. Designer, not a developer. Verifies output visually. Always address as Red or Captain Red."
+      },
+      {
+        "filename": "feedback_ten_ten_format.md",
+        "frontmatter": {
+          "name": "Ten-Ten Format Rule",
+          "description": "Mandatory response format max 10 sentences max 10 words per sentence overrides every other length rule",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 7,
+          "keywords": ["ten-ten", "format", "length", "concise", "bullets"],
+          "tags": ["communication", "format"],
+          "links": [],
+          "created": "2026-04-15T00:00:00Z",
+          "last_accessed": "2026-04-20T00:00:00Z",
+          "access_count": 3
+        },
+        "body": "Every response must follow ten-ten format. Maximum 10 bullets or sentences. Each sentence maximum 10 words. No walls of text. Bullets only."
+      },
+      {
+        "filename": "feedback_two_line_answers.md",
+        "frontmatter": {
+          "name": "Two Line Answers",
+          "description": "Crisp answers max 1 to 3 bullets or 2 lines of prose total",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 6,
+          "keywords": ["two-line", "concise", "bullets", "format", "length"],
+          "tags": ["communication", "format"],
+          "links": [],
+          "created": "2026-04-14T00:00:00Z",
+          "last_accessed": "2026-04-14T00:00:00Z",
+          "access_count": 1
+        },
+        "body": "Crisp 1 to 3 bullets max. 2 lines of prose maximum. No padding. Lead with the answer."
+      },
+      {
+        "filename": "feedback_concise_responses.md",
+        "frontmatter": {
+          "name": "Concise Responses",
+          "description": "Bulleted responses only no walls of text concise format",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 5,
+          "keywords": ["concise", "bullets", "format", "length"],
+          "tags": ["communication", "format"],
+          "links": [],
+          "created": "2026-04-10T00:00:00Z",
+          "last_accessed": "2026-04-10T00:00:00Z",
+          "access_count": 0
+        },
+        "body": "Bulleted responses only. No walls of text. Concise above all. Structure scannable."
+      },
+      {
+        "filename": "feedback_shader_premortem.md",
+        "frontmatter": {
+          "name": "Shader Pre-Mortem",
+          "description": "Five question pre-mortem before any shader edit covers fragColor downstream blend alpha",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 9,
+          "protected": true,
+          "keywords": ["shader", "premortem", "fragColor", "alpha", "blend", "GLSL"],
+          "tags": ["GPU", "scar-tissue"],
+          "links": [],
+          "created": "2026-03-25T00:00:00Z",
+          "last_accessed": "2026-04-30T00:00:00Z",
+          "access_count": 18
+        },
+        "body": "Before editing any shader answer five questions. What does fragColor output. Who reads it downstream. Will mask alpha propagate. Will blend modes composite. Does it compile in GLSL ES 3.00."
+      },
+      {
+        "filename": "feedback_no_background_agents.md",
+        "frontmatter": {
+          "name": "No Background Agents",
+          "description": "Never use background or parallel agents Captain Red wants Claude to do all work personally",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 8,
+          "protected": true,
+          "keywords": ["agents", "background", "parallel", "subagents"],
+          "tags": ["agent-behavior"],
+          "links": [],
+          "created": "2026-03-28T00:00:00Z",
+          "last_accessed": "2026-05-01T00:00:00Z",
+          "access_count": 12
+        },
+        "body": "Never use background agents or parallel subagents. Do everything personally line by line."
+      },
+      {
+        "filename": "compiler_v3_pipeline_stages.md",
+        "frontmatter": {
+          "name": "Compiler V3 Pipeline Stages",
+          "description": "V3 compiler eight stages normalize validate cull analyze liveness FBO schedule engineGen wrappers",
+          "type": "reference",
+          "tier": "procedural",
+          "importance": 9,
+          "keywords": ["compiler", "v3", "pipeline", "stages", "FBO", "schedule"],
+          "tags": ["compiler", "architecture"],
+          "links": [],
+          "created": "2026-04-01T00:00:00Z",
+          "last_accessed": "2026-05-03T00:00:00Z",
+          "access_count": 25
+        },
+        "body": "V3 compiler runs eight stages. Normalize. Validate. Cull. Analyze DAG. Liveness. FBO allocate. Schedule. EngineGen plus wrappers."
+      },
+      {
+        "filename": "project_compiler_strategy_settled.md",
+        "frontmatter": {
+          "name": "Compiler Strategy Settled",
+          "description": "V3 production V4 quarantined for Year 3 decision made after peer review",
+          "type": "project",
+          "tier": "semantic",
+          "importance": 8,
+          "keywords": ["compiler", "v3", "v4", "strategy", "production"],
+          "tags": ["compiler", "architecture"],
+          "links": [],
+          "created": "2026-03-29T00:00:00Z",
+          "last_accessed": "2026-04-28T00:00:00Z",
+          "access_count": 14
+        },
+        "body": "V3 is production. V4 quarantined as Year 3 architecture. All export and publish features use compiler-v3."
+      },
+      {
+        "filename": "project_daily_build_log.md",
+        "frontmatter": {
+          "name": "Daily Build Log",
+          "description": "Day by day log of build activity",
+          "type": "project",
+          "tier": "semantic",
+          "importance": 2,
+          "keywords": ["log", "build", "chronicle"],
+          "tags": ["episodic-chronicle"],
+          "links": [],
+          "created": "2026-04-09T00:00:00Z",
+          "last_accessed": "2026-04-09T00:00:00Z",
+          "access_count": 0
+        },
+        "body": "April 9 entry. Built one thing. Fixed another. End of log."
+      },
+      {
+        "filename": "node_graph_socket_map.md",
+        "frontmatter": {
+          "name": "Socket Map Authoritative",
+          "description": "lib/graph/socketMap.ts is the single source of truth for socket to uniform mapping",
+          "type": "reference",
+          "tier": "procedural",
+          "importance": 9,
+          "protected": true,
+          "keywords": ["socket", "uniform", "graph", "map", "tex_in"],
+          "tags": ["graph", "architecture"],
+          "links": [],
+          "created": "2026-03-20T00:00:00Z",
+          "last_accessed": "2026-05-02T00:00:00Z",
+          "access_count": 30
+        },
+        "body": "socketMap.ts authoritative. Never inline socket strings outside it."
+      },
+      {
+        "filename": "feedback_no_typed_value_in_old_paradigm.md",
+        "frontmatter": {
+          "name": "Distinct Topic A",
+          "description": "Highly specific rule about a unique topic with no overlap to communication or shaders",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 4,
+          "keywords": ["distinct-topic-a", "unique-keyword-aaa"],
+          "tags": ["misc"],
+          "links": [],
+          "created": "2026-04-05T00:00:00Z",
+          "last_accessed": "2026-04-05T00:00:00Z",
+          "access_count": 0
+        },
+        "body": "Distinct topic A body. Nothing overlaps with anything else."
+      },
+      {
+        "filename": "feedback_distinct_topic_b.md",
+        "frontmatter": {
+          "name": "Distinct Topic B",
+          "description": "Different specific rule about a different unique topic",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 4,
+          "keywords": ["distinct-topic-b", "unique-keyword-bbb"],
+          "tags": ["misc"],
+          "links": [],
+          "created": "2026-04-05T00:00:00Z",
+          "last_accessed": "2026-04-05T00:00:00Z",
+          "access_count": 0
+        },
+        "body": "Distinct topic B body. Nothing overlaps with anything else."
+      },
+      {
+        "filename": "feedback_distinct_topic_c.md",
+        "frontmatter": {
+          "name": "Distinct Topic C",
+          "description": "Yet another isolated rule with no shared keywords",
+          "type": "feedback",
+          "tier": "episodic",
+          "importance": 4,
+          "keywords": ["distinct-topic-c", "unique-keyword-ccc"],
+          "tags": ["misc"],
+          "links": [],
+          "created": "2026-04-05T00:00:00Z",
+          "last_accessed": "2026-04-05T00:00:00Z",
+          "access_count": 0
+        },
+        "body": "Distinct topic C body. Independent from the others."
+      }
+    ],
+    "memoryIndex": "# Memory Index\n\n## User\n\n- [user_profile.md](user_profile.md) - Captain Red identity\n\n## Feedback - Communication\n\n- [feedback_ten_ten_format.md](feedback_ten_ten_format.md) - ten-ten format ceiling\n- [feedback_two_line_answers.md](feedback_two_line_answers.md) - two line answers\n- [feedback_concise_responses.md](feedback_concise_responses.md) - concise responses\n\n## Feedback - Engineering\n\n- [feedback_shader_premortem.md](feedback_shader_premortem.md) - 5 question shader pre-mortem\n\n## Feedback - Agent Behavior\n\n- [feedback_no_background_agents.md](feedback_no_background_agents.md) - never run parallel agents\n\n## Reference\n\n- [compiler_v3_pipeline_stages.md](compiler_v3_pipeline_stages.md) - V3 compiler stages\n- [node_graph_socket_map.md](node_graph_socket_map.md) - authoritative socket map\n\n## Project\n\n- [project_compiler_strategy_settled.md](project_compiler_strategy_settled.md) - V3 production V4 quarantined\n- [project_daily_build_log.md](project_daily_build_log.md) - daily build chronicle\n\n## Misc\n\n- [feedback_no_typed_value_in_old_paradigm.md](feedback_no_typed_value_in_old_paradigm.md) - distinct topic A\n- [feedback_distinct_topic_b.md](feedback_distinct_topic_b.md) - distinct topic B\n- [feedback_distinct_topic_c.md](feedback_distinct_topic_c.md) - distinct topic C\n",
+    "citationFiles": [
+      {
+        "relativePath": "CLAUDE.md",
+        "content": "# Project rules\n\nSee node_graph_socket_map.md for the canonical socket map.\nThe shader pre-mortem in feedback_shader_premortem.md is mandatory.\n"
+      },
+      {
+        "relativePath": ".claude/rules/glsl.md",
+        "content": "# GLSL rules\n\nR06: see feedback_shader_premortem.md for the 5 question gate.\n"
+      },
+      {
+        "relativePath": ".claude/rules/agents.md",
+        "content": "# Agent rules\n\nR17 plan-before-code. No parallel agents - cf feedback_no_background_agents.md.\n"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "migrate-dry-run-no-writes",
+      "category": "migration",
+      "subcommand": "migrate",
+      "args": ["--dry-run"],
+      "expect": {
+        "exitCode": 0,
+        "stdoutContainsAny": ["dry-run", "would add", "would migrate"],
+        "filesUnchanged": [
+          "user_profile.md",
+          "feedback_ten_ten_format.md",
+          "compiler_v3_pipeline_stages.md",
+          "MEMORY.md"
+        ]
+      },
+      "rationale": "Dry-run must never write to disk. Every fixture file should be byte-identical after the run."
+    },
+    {
+      "id": "migrate-adds-tier-from-type",
+      "category": "migration",
+      "subcommand": "migrate",
+      "args": [],
+      "expect": {
+        "exitCode": 0,
+        "frontmatterHas": [
+          { "filename": "feedback_ten_ten_format.md", "field": "tier", "value": "episodic" },
+          { "filename": "project_compiler_strategy_settled.md", "field": "tier", "value": "semantic" },
+          { "filename": "compiler_v3_pipeline_stages.md", "field": "tier", "value": "procedural" },
+          { "filename": "user_profile.md", "field": "tier", "value": "core" }
+        ]
+      },
+      "rationale": "Migration maps the type field to the tier field per the canonical taxonomy: feedback=episodic, project=semantic, reference=procedural, user=core."
+    },
+    {
+      "id": "migrate-preserves-body",
+      "category": "migration",
+      "subcommand": "migrate",
+      "args": [],
+      "expect": {
+        "exitCode": 0,
+        "bodyByteIdentical": [
+          "feedback_ten_ten_format.md",
+          "compiler_v3_pipeline_stages.md",
+          "project_daily_build_log.md"
+        ]
+      },
+      "rationale": "Migration only touches frontmatter. The markdown body below the closing --- must be byte-identical before and after."
+    },
+    {
+      "id": "store-creates-file-and-index-entry",
+      "category": "store",
+      "subcommand": "store",
+      "args": [
+        "--name", "feedback_new_rule",
+        "--type", "feedback",
+        "--importance", "5",
+        "--keywords", "new,rule,test",
+        "--description", "A brand new rule for testing",
+        "--body", "Body text for the new rule. Short and clear."
+      ],
+      "expect": {
+        "exitCode": 0,
+        "fileExists": ["feedback_new_rule.md"],
+        "frontmatterHas": [
+          { "filename": "feedback_new_rule.md", "field": "type", "value": "feedback" },
+          { "filename": "feedback_new_rule.md", "field": "tier", "value": "episodic" },
+          { "filename": "feedback_new_rule.md", "field": "importance", "value": 5 }
+        ],
+        "memoryIndexContains": ["feedback_new_rule.md"]
+      },
+      "rationale": "Store creates the file with correct frontmatter (including derived tier) and atomically appends a MEMORY.md pointer."
+    },
+    {
+      "id": "store-rejects-duplicate-name",
+      "category": "store",
+      "subcommand": "store",
+      "args": [
+        "--name", "feedback_ten_ten_format",
+        "--type", "feedback",
+        "--importance", "5",
+        "--keywords", "duplicate",
+        "--description", "Should be rejected",
+        "--body", "Should not be written."
+      ],
+      "expect": {
+        "exitCode": 1,
+        "stderrContainsAny": ["already exists", "conflict", "duplicate"],
+        "filesUnchanged": ["feedback_ten_ten_format.md", "MEMORY.md"]
+      },
+      "rationale": "Storing under a name that already exists must halt with a clear error and leave the existing file plus index untouched."
+    },
+    {
+      "id": "retrieve-keyword-overlap-ranks-correctly",
+      "category": "retrieve",
+      "subcommand": "retrieve",
+      "args": ["--query", "shader fragColor alpha", "--k", "3"],
+      "expect": {
+        "exitCode": 0,
+        "stdoutContainsAny": ["feedback_shader_premortem"],
+        "stdoutFirstResult": "feedback_shader_premortem.md"
+      },
+      "rationale": "Query terms intersect heavily with the shader pre-mortem keywords. It must rank top-1."
+    },
+    {
+      "id": "retrieve-respects-type-filter",
+      "category": "retrieve",
+      "subcommand": "retrieve",
+      "args": ["--query", "compiler", "--type", "reference", "--k", "5"],
+      "expect": {
+        "exitCode": 0,
+        "stdoutContainsAny": ["compiler_v3_pipeline_stages"],
+        "stdoutDoesNotContain": ["project_compiler_strategy_settled"]
+      },
+      "rationale": "The type=reference filter must exclude project-typed files even when keyword overlap is high."
+    },
+    {
+      "id": "retrieve-readonly-mode-no-access-count-update",
+      "category": "retrieve",
+      "subcommand": "retrieve",
+      "args": ["--query", "shader", "--readonly", "--k", "1"],
+      "expect": {
+        "exitCode": 0,
+        "frontmatterUnchanged": [
+          { "filename": "feedback_shader_premortem.md", "fields": ["access_count", "last_accessed"] }
+        ]
+      },
+      "rationale": "Read-only retrieval must not bump access_count or last_accessed. This is the audit/inspection mode."
+    },
+    {
+      "id": "update-modifies-frontmatter-only",
+      "category": "update",
+      "subcommand": "update",
+      "args": [
+        "--name", "feedback_concise_responses",
+        "--importance", "6",
+        "--add-keywords", "extra-keyword"
+      ],
+      "expect": {
+        "exitCode": 0,
+        "frontmatterHas": [
+          { "filename": "feedback_concise_responses.md", "field": "importance", "value": 6 }
+        ],
+        "bodyByteIdentical": ["feedback_concise_responses.md"]
+      },
+      "rationale": "Update touches only the YAML frontmatter. Body bytes below the closing --- must be identical."
+    },
+    {
+      "id": "update-protected-without-force-blocked",
+      "category": "update",
+      "subcommand": "update",
+      "args": [
+        "--name", "feedback_shader_premortem",
+        "--importance", "3"
+      ],
+      "expect": {
+        "exitCode": 1,
+        "stderrContainsAny": ["protected", "force", "refuse"],
+        "frontmatterUnchanged": [
+          { "filename": "feedback_shader_premortem.md", "fields": ["importance"] }
+        ]
+      },
+      "rationale": "Protected entries cannot be modified without explicit --force. The update must abort and the file stay untouched."
+    },
+    {
+      "id": "summarize-detects-keyword-overlap-cluster",
+      "category": "summarize",
+      "subcommand": "summarize",
+      "args": ["--scope", "feedback", "--detect-only"],
+      "expect": {
+        "exitCode": 0,
+        "stdoutContainsAll": [
+          "feedback_ten_ten_format",
+          "feedback_two_line_answers",
+          "feedback_concise_responses"
+        ],
+        "stdoutContainsAny": ["cluster", "duplicate", "overlap"]
+      },
+      "rationale": "The three communication-format files share keywords (concise, bullets, format, length) above the 60% threshold. Summarize in detect-only mode must surface them as a cluster."
+    },
+    {
+      "id": "summarize-ignores-low-overlap-files",
+      "category": "summarize",
+      "subcommand": "summarize",
+      "args": ["--scope", "feedback", "--detect-only", "--only-distinct"],
+      "expect": {
+        "exitCode": 0,
+        "stdoutDoesNotContain": [
+          "feedback_no_typed_value_in_old_paradigm <-> feedback_distinct_topic_b",
+          "feedback_distinct_topic_b <-> feedback_distinct_topic_c"
+        ]
+      },
+      "rationale": "The three distinct-topic files share no keywords. They must not be flagged as a cluster."
+    },
+    {
+      "id": "discard-name-not-cited-archives",
+      "category": "discard",
+      "subcommand": "discard",
+      "args": ["--name", "project_daily_build_log", "--confirm"],
+      "expect": {
+        "exitCode": 0,
+        "fileMissing": ["project_daily_build_log.md"],
+        "archivedFileExists": ["project_daily_build_log.md"],
+        "memoryIndexDoesNotContain": ["project_daily_build_log.md"]
+      },
+      "rationale": "Daily build log is uncited, low importance. Discard must move it to the archive directory and remove its MEMORY.md entry."
+    },
+    {
+      "id": "discard-name-cited-blocked",
+      "category": "discard",
+      "subcommand": "discard",
+      "args": ["--name", "node_graph_socket_map", "--confirm"],
+      "expect": {
+        "exitCode": 1,
+        "stderrContainsAny": ["cited", "citation", "referenced"],
+        "fileExists": ["node_graph_socket_map.md"],
+        "memoryIndexContains": ["node_graph_socket_map.md"]
+      },
+      "rationale": "node_graph_socket_map.md is cited from CLAUDE.md. Citation grep must catch the reference and block the discard."
+    },
+    {
+      "id": "discard-predicate-no-confirm-no-execute",
+      "category": "discard",
+      "subcommand": "discard",
+      "args": [
+        "--predicate-type", "feedback",
+        "--predicate-max-importance", "4",
+        "--predicate-max-access-count", "1"
+      ],
+      "expect": {
+        "exitCodeAny": [0, 2],
+        "stdoutContainsAny": ["candidate", "would archive", "dry-run", "preview"],
+        "filesUnchanged": [
+          "feedback_concise_responses.md",
+          "feedback_no_typed_value_in_old_paradigm.md",
+          "feedback_distinct_topic_b.md",
+          "feedback_distinct_topic_c.md",
+          "MEMORY.md"
+        ]
+      },
+      "rationale": "Predicate discard without --confirm must list candidates only and execute nothing. No file may be moved or archived."
+    },
+    {
+      "id": "discard-protected-blocked",
+      "category": "discard",
+      "subcommand": "discard",
+      "args": [
+        "--predicate-type", "feedback",
+        "--predicate-max-importance", "10",
+        "--confirm"
+      ],
+      "expect": {
+        "exitCodeAny": [0, 1],
+        "fileExists": [
+          "feedback_shader_premortem.md",
+          "feedback_no_background_agents.md"
+        ],
+        "memoryIndexContains": [
+          "feedback_shader_premortem.md",
+          "feedback_no_background_agents.md"
+        ]
+      },
+      "rationale": "Even with a permissive predicate, protected: true entries must be filtered out of any candidate set."
+    },
+    {
+      "id": "discard-archive-write-fails-rollback",
+      "category": "atomic",
+      "subcommand": "discard",
+      "args": ["--name", "feedback_distinct_topic_b", "--confirm"],
+      "harness": { "archiveDirReadOnly": true },
+      "expect": {
+        "exitCode": 1,
+        "fileExists": ["feedback_distinct_topic_b.md"],
+        "memoryIndexContains": ["feedback_distinct_topic_b.md"]
+      },
+      "rationale": "If the archive write fails (sim: read-only archive dir), the source file and MEMORY.md must both be untouched. No partial state."
+    },
+    {
+      "id": "citation-scan-finds-rule-citation",
+      "category": "atomic",
+      "subcommand": "citation-scan",
+      "args": ["--name", "feedback_no_background_agents"],
+      "expect": {
+        "exitCode": 0,
+        "stdoutContainsAny": [".claude/rules/agents.md", "agents.md"]
+      },
+      "rationale": "Citation scan must walk the configured citation roots and report the rule file that mentions feedback_no_background_agents."
+    }
+  ]
+}

@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "description": "Calibration gold-set for the /recall-similar primitive vector index. 22 queries across 7 categories validate Recall@5, MRR, and Precision@5 against the live primitive catalog at lib/primitives/definitions/. All expected ids are drawn directly from lib/primitives/definitions/_catalog.generated.ts (verified 2026-05-04) and the drivers/ folder; no id is inferred from a filename.",
+  "scriptUnderTest": ".claude/scripts/recall-similar.mjs",
+  "indexPath": ".agents/vector-index/primitive-index.json",
+  "passingThresholds": {
+    "recallAt5": 0.80,
+    "mrr": 0.70,
+    "precisionAt5": 0.50
+  },
+  "spawnContract": {
+    "command": "node",
+    "args": ["recall-similar.mjs", "--query", "<query>", "--k", "10", "--json"],
+    "cwd": ".claude/scripts/",
+    "expectedJsonShape": "{ results: Array<{ id: string, score: number, displayName?: string, category?: string, gpuCost?: string }> }",
+    "exitCode": "0 = ok; non-zero = infrastructure failure (treated as runner error, not query failure)"
+  },
+  "denseDetection": {
+    "corpusPath": ".agents/vector-index/corpus.json",
+    "field": "embeddingProvider",
+    "noneValues": ["none", "bm25-only", null]
+  },
+  "cases": [
+    {
+      "id": "direct-name-bloom",
+      "category": "direct-name",
+      "query": "bloom",
+      "expectedInTop3": ["bloom", "fastBloom"],
+      "expectedInTop10": ["bloom", "fastBloom", "exponentialBloom", "halation", "halationBloomMatrix"],
+      "rationale": "Exact substring match on 'bloom' against name and id. BM25 must rank bloom and fastBloom first. exponentialBloom (display 'Optical Bloom'), halation, halationBloomMatrix share the bloom/glow taxonomy."
+    },
+    {
+      "id": "direct-name-kaleidoscope",
+      "category": "direct-name",
+      "query": "kaleidoscope",
+      "expectedInTop3": ["kaleidoscope"],
+      "expectedInTop10": ["kaleidoscope", "mirror", "polar"],
+      "rationale": "Single canonical primitive. Mirror and polar share the symmetric-fold taxonomy but are not name matches."
+    },
+    {
+      "id": "direct-name-voronoi",
+      "category": "direct-name",
+      "query": "voronoi",
+      "expectedInTop3": ["voronoiStars", "voronoiShatter", "voronoiFractal"],
+      "expectedInTop10": ["voronoiStars", "voronoiShatter", "voronoiFractal", "voronoiParticleMesh", "stippler", "stars", "powerDiagram", "centroidalPartition"],
+      "rationale": "Six primitives have 'voronoi' in id or name. stippler (display 'Voronoi Stippler') and stars (display 'Voronoi Stars 1') match on name. powerDiagram and centroidalPartition are voronoi-family by mathematical relation."
+    },
+    {
+      "id": "direct-name-mosaic",
+      "category": "direct-name",
+      "query": "mosaic",
+      "expectedInTop3": ["mosaic"],
+      "expectedInTop10": ["mosaic", "glyphMosaicEngine", "halftone", "stipple"],
+      "rationale": "mosaic is the canonical id. glyphMosaicEngine is the only other 'mosaic' substring. halftone and stipple share the tiled-discrete-element taxonomy."
+    },
+    {
+      "id": "category-color-grading",
+      "category": "category",
+      "query": "color grading",
+      "expectedInTop3": ["adjust", "primaryGrading", "ascCdl"],
+      "expectedInTop10": ["adjust", "primaryGrading", "ascCdl", "acesTonemap", "lut3d", "crossProcess", "filmStock", "colorBalance", "oklchSplitTone", "viewTransform"],
+      "rationale": "adjust display name is 'Color Correction'. primaryGrading display 'Primary Color Grading'. ascCdl display 'Primary Wheels (CDL)'. The color-grading cluster is 10 primitives wide; top-3 must be the canonical grading nodes."
+    },
+    {
+      "id": "category-particle-systems",
+      "category": "category",
+      "query": "particle systems",
+      "expectedInTop3": ["particleEmitter", "particleRenderer", "particleForces"],
+      "expectedInTop10": ["particleEmitter", "particleRenderer", "particleForces", "particleCollider", "particleSeparation", "particleState", "particleCursor", "liquidParticles", "particleWaterfall", "fireflies"],
+      "rationale": "Eight primitives have 'particle' in id. fireflies and liquidParticles are particle-class without the 'particle' prefix. Top-3 should be the core emit/render/forces triad."
+    },
+    {
+      "id": "category-noise-patterns",
+      "category": "category",
+      "query": "noise patterns",
+      "expectedInTop3": ["noisefill", "noise", "flowNoise"],
+      "expectedInTop10": ["noisefill", "noise", "flowNoise", "waveletNoise", "domainWarping", "fbm", "filmGrain", "spiralNoise"],
+      "rationale": "Five primitives have 'noise' in id. fbm (display 'Fractal Distort') is FBM noise. filmGrain (display 'Procedural Grain') is noise-based. spiralNoise (display 'Dusty Nebula') is noise-class."
+    },
+    {
+      "id": "property-vocab-hue-shift",
+      "category": "property-vocab",
+      "query": "hue shift",
+      "expectedInTop3": ["hueVsSat", "adjust", "colorBalance"],
+      "expectedInTop10": ["hueVsSat", "adjust", "colorBalance", "colorTemperature", "selectiveColor", "channelMixer", "spectralTint"],
+      "rationale": "hueVsSat (display 'Hue vs. Saturation') is the canonical hue control. adjust (Color Correction) carries hue/saturation/brightness sliders. colorBalance is shadow/mid/highlight hue shift."
+    },
+    {
+      "id": "property-vocab-depth-of-field",
+      "category": "property-vocab",
+      "query": "depth of field",
+      "expectedInTop3": ["bokeh", "tiltShift", "depthlessDof"],
+      "expectedInTop10": ["bokeh", "tiltShift", "depthlessDof", "hexBokeh", "irisBlur", "progressiveBlur", "animatedBokeh", "depthGradientBlur"],
+      "rationale": "bokeh, hexBokeh, animatedBokeh are the bokeh cluster. tiltShift (display 'Tilt-Shift Miniature') is canonical DOF. depthlessDof (display 'Depthless DOF') names it directly. progressiveBlur display is 'Depth Blur'."
+    },
+    {
+      "id": "property-vocab-anamorphic-flare",
+      "category": "property-vocab",
+      "query": "anamorphic flare",
+      "expectedInTop3": ["anamorphicSmear", "lensFlare", "bloom"],
+      "expectedInTop10": ["anamorphicSmear", "anamorphicSqueeze", "lensFlare", "bloom", "lightLeak"],
+      "rationale": "Two anamorphic primitives plus lensFlare. bloom carries Anamorphic H / Anamorphic V shape options per the catalog audit. lightLeak is flare-adjacent."
+    },
+    {
+      "id": "synonym-starry",
+      "category": "synonym",
+      "query": "starry",
+      "expectedInTop3": ["starsBackground", "stars", "cosmos"],
+      "expectedInTop10": ["starsBackground", "stars", "cosmos", "voronoiStars", "starLight", "starV2", "fireflies", "fireflySwarm", "sparkle"],
+      "rationale": "No primitive contains the literal substring 'starry'. starsBackground, stars (Voronoi Stars 1), cosmos, voronoiStars, starLight, starV2 contain 'star'. fireflies/fireflySwarm/sparkle are the night-sky semantic neighborhood. Dense embedding required for true synonym recall.",
+      "requiresDense": true
+    },
+    {
+      "id": "synonym-smoke",
+      "category": "synonym",
+      "query": "smoke",
+      "expectedInTop3": ["smoke", "smokeTrail", "wisps"],
+      "expectedInTop10": ["smoke", "smokeTrail", "wisps", "fog", "horizonFog", "glassFog", "inkInWater"],
+      "rationale": "Direct: smoke, smokeTrail. wisps display name is 'Smoke Tendrils' — name-token match, not id-substring. fog/horizonFog/glassFog/inkInWater are atmospheric-volume neighbors."
+    },
+    {
+      "id": "synonym-glass",
+      "category": "synonym",
+      "query": "glass",
+      "expectedInTop3": ["glassFog", "glasslens", "liquidGlass"],
+      "expectedInTop10": ["glassFog", "glasslens", "liquidGlass", "liquidGlassV2", "refractionSheet", "frequencySeparation"],
+      "rationale": "Four direct 'glass' matches. refractionSheet is the optical-glass semantic neighbor."
+    },
+    {
+      "id": "synonym-rainy",
+      "category": "synonym",
+      "query": "rainy",
+      "expectedInTop3": ["rain", "rainDrops", "waterDrops"],
+      "expectedInTop10": ["rain", "rainDrops", "waterDrops", "waterDropsPhysics", "cometRain", "matrixRain", "proceduralSnow"],
+      "rationale": "Substring 'rain' hits rain, rainDrops, cometRain, matrixRain. waterDrops/waterDropsPhysics are the precipitation neighborhood. Dense should bridge 'rainy' to all of these.",
+      "requiresDense": true
+    },
+    {
+      "id": "action-intent-rotate-on-hover",
+      "category": "action-intent",
+      "query": "rotate on hover",
+      "expectedInTop3": ["hoverDriver", "mouseDriver", "kaleidoscope"],
+      "expectedInTop10": ["hoverDriver", "mouseDriver", "kaleidoscope", "swirl", "cursorSpotlight", "polar"],
+      "rationale": "Designer-vocabulary query. hoverDriver and mouseDriver are the interactivity sources. kaleidoscope and swirl have rotation axes. cursorSpotlight is hover-reactive.",
+      "requiresDense": true
+    },
+    {
+      "id": "action-intent-pulse-on-bass",
+      "category": "action-intent",
+      "query": "pulse on the bass",
+      "expectedInTop3": ["audioDriver", "audioReactive"],
+      "expectedInTop10": ["audioDriver", "audioReactive", "oscillatorBank", "waveDriver", "bloom"],
+      "rationale": "Two audio-source primitives. oscillatorBank and waveDriver are rhythmic signal generators. bloom is a common audio-reactive target due to its intensity/threshold uniforms.",
+      "requiresDense": true
+    },
+    {
+      "id": "action-intent-scroll-parallax",
+      "category": "action-intent",
+      "query": "scroll-driven parallax",
+      "expectedInTop3": ["scrollDriver", "depthParallax", "parallaxVolumeWarp"],
+      "expectedInTop10": ["scrollDriver", "depthParallax", "parallaxVolumeWarp", "depthZoom", "depthGradientBlur"],
+      "rationale": "scrollDriver is the canonical signal source. depthParallax and parallaxVolumeWarp are parallax effects. depthZoom and depthGradientBlur are scroll-driven depth effects."
+    },
+    {
+      "id": "agent-recall-voronoi-space",
+      "category": "agent-recall",
+      "query": "voronoi tessellation cellular",
+      "expectedInTop3": ["voronoiFractal", "voronoiShatter", "stippler"],
+      "expectedInTop10": ["voronoiFractal", "voronoiShatter", "voronoiParticleMesh", "voronoiStars", "stippler", "stars", "powerDiagram", "centroidalPartition", "cellColony"],
+      "rationale": "/og-node-architecture Phase 0 duplicate-prevention query. The complete voronoi mathematical space in this catalog. cellColony (display 'Cell Colony') is cellular by name. powerDiagram is generalized voronoi (weighted)."
+    },
+    {
+      "id": "agent-recall-domain-warped-noise",
+      "category": "agent-recall",
+      "query": "domain warped fbm noise",
+      "expectedInTop3": ["domainWarping", "fbm", "noisefill"],
+      "expectedInTop10": ["domainWarping", "fbm", "noisefill", "noise", "flowNoise", "waveletNoise", "filmGrain", "fbmTerrain"],
+      "rationale": "Phase 0 query that matches the use-cases doc verbatim. domainWarping is the explicit primitive. fbm display 'Fractal Distort'. fbmTerrain is the ports/ FBM primitive. noisefill, noise, flowNoise, waveletNoise are the noise neighborhood."
+    },
+    {
+      "id": "agent-recall-raymarched-sdf",
+      "category": "agent-recall",
+      "query": "raymarched sdf primitive",
+      "expectedInTop3": ["sdf_shape", "apollonianGasket", "sdfMorph"],
+      "expectedInTop10": ["sdf_shape", "apollonianGasket", "sdfMorph", "heartSdf", "morphingSphere", "twodsdf"],
+      "rationale": "sdf_shape display name is 'Procedural 3D' — the canonical raymarcher. apollonianGasket is fractal-SDF raymarched. sdfMorph, heartSdf, twodsdf (Vector Shape) are 2D SDF primitives. morphingSphere is implicit-surface raymarched."
+    },
+    {
+      "id": "edge-case-unknown-term",
+      "category": "edge-case",
+      "query": "anisotropic specular highlight",
+      "expectedInTop3": ["anisotropicHighlight"],
+      "expectedInTop10": ["anisotropicHighlight", "anisotropicEtch", "iridescentSheen", "rimLight", "fresnelEdge"],
+      "rationale": "Compound technical term. anisotropicHighlight is the exact name. anisotropicEtch shares the prefix. iridescentSheen, rimLight, fresnelEdge are specular-shading neighbors."
+    },
+    {
+      "id": "edge-case-empty-query",
+      "category": "edge-case",
+      "query": "",
+      "expectedInTop3": [],
+      "expectedInTop10": [],
+      "rationale": "Empty query must error or return zero results. This case is marked as accepting any non-crash behavior (no expected ids). The runner does not penalize for missing hits when expectedInTop3 is empty.",
+      "allowEmpty": true
+    }
+  ]
+}

@@ -123,6 +123,39 @@ objective ms, reproducible every cycle. See [`references/lumina-latency-loop.md`
 For backend-mutating loops like ours, **don't fully automate**: run the measure/diagnose/research/plan
 autonomously, gate EXECUTE behind RED, then verify autonomously. The loop is the discipline, not the autopilot.
 
+## Loop engineering — the general loop, beyond metric-improvement
+
+> The metric-improvement loop above is one shape. This section (folded in from the broader *loop-engineering*
+> doctrine — Steinberger/Cherny 2026, Huntley's Ralph, ReAct→Reflexion→Voyager) covers loop engineering in
+> general: choosing the right primitive, and the discipline that decides whether *any* loop works. Deep
+> references: `references/loop-eng-01-command-reference.md` … `loop-eng-06-discourse-prior-art-citations.md`.
+
+**The 5 things that decide whether a loop works** (a loop missing any one is a token furnace, not an engine):
+1. **A definition-of-done an external check can falsify** — tests/type-check/a separate evaluator, never the agent's self-report (the "completion lie").
+2. **A verifier separate from the maker** — single-agent self-review lands <50% useful findings; a dedicated checker ~75%.
+3. **A hard budget + iteration cap enforced OUTSIDE the model** — documented runaways: \$6k overnight, \$4k weekend; every retry re-reads the whole context → naive loops cost O(N²).
+4. **Fresh context per unit of work, state on disk** — Ralph resets to a clean window each iteration and reads state from files+git → O(N) not O(N²), dodging context rot.
+5. **A goal anchor that survives the loop** — re-state the goal verbatim each turn; judge completion against the *original* spec, never intermediate progress.
+
+**Pick the loop (the primitive map):**
+
+| Primitive | What it is | Reach for it when |
+|---|---|---|
+| `/loop [interval] [prompt]` | time-driven; omit interval → self-paced (`ScheduleWakeup`) | recurring/polling, or self-paced condition work |
+| `/goal [condition]` | condition-driven; a separate Haiku confirms a written done-condition across turns | "keep going until X is true" |
+| `/schedule` (Routines) | cloud cron, survives your machine off; min 1h | durable unattended automation |
+| `Workflow` (tool) | deterministic multi-agent JS orchestration (`agent`/`parallel`/`pipeline`) | fan-out/pipeline work — **opt-in only** |
+| Ralph loop | fresh-context-per-iteration, spec on disk, completion-promise gate | unattended greenfield/migration with a machine-checkable spec |
+
+**When NOT to loop (the gate — all four must hold, else a single prompt is cheaper):** the task *repeats*;
+*automated verification exists*; the agent can *execute+observe its own output*; it has *senior-level tooling*.
+A one-off task, a vague goal ("improve UX"), or no falsifiable done-condition → do **not** loop; it declares
+false victory or runs the bill forever. *Generation was never the bottleneck; review capacity is.*
+
+**Workflow gate:** the `Workflow` tool + large fan-outs cost real money and run on **explicit opt-in only**
+(the user said "use a workflow"/"ultracode"/"orchestrate this", or a skill instructed it). Otherwise use the
+`Agent` tool for individual sub-agents, or describe it and ask.
+
 ## Status & links
 
 Built 2026-06-22 from the loop research + the finance latency loop. References cite their sources inline

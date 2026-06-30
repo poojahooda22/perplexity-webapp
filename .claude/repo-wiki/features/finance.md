@@ -9,10 +9,11 @@ cites:
   - backend/finance/summary.ts
   - backend/finance/research.ts
   - backend/finance/news.ts
+  - backend/lib/cache.ts
   - backend/index.ts
   - frontend/src/components/finance/finance-view.tsx
   - worker/index.ts
-fresh: 2026-06-22
+fresh: 2026-06-24
 ---
 
 # Finance vertical
@@ -23,7 +24,7 @@ inside `/perplexity_ask`.
 ## Backend modules — `backend/finance/`
 | File | Role | Key exports |
 |---|---|---|
-| `routes.ts` | router: cached reads + cron warmer | `financeRouter` (`:14`), `readRoute` (`:30`), `marketReadRoute` (`:44`) |
+| `routes.ts` | router: cached reads + freeze-aware cron warmer | `financeRouter` (`:27`), `readRoute` (`:45`), `marketReadRoute` (`:59`), `warmFinanceCache(force)` (`:181`) |
 | `sources.ts` | free-tier fetchers + `Provenance`/`commercialOk` | `fetchCrypto`(64), `fetchPredictions`(202), `fetchIndices`(317), `fetchSectors`(367), `fetchStocks`(411), `fetchQuotes`(453) |
 | `tools.ts` | AI-SDK finance tool belt | `buildFinanceTools` (`:54`) |
 | `hooks.ts` | per-tool budget + disclaimer wrapper | `withGuard`(59), `withinBudget`(26), `RateBudgetError`(43) |
@@ -35,6 +36,23 @@ inside `/perplexity_ask`.
 Routes + auth + TTLs: [entities/routes.md](../entities/routes.md). Providers + licensing:
 [entities/market-data-providers.md](../entities/market-data-providers.md). Tools:
 [entities/ai-tools-registry.md](../entities/ai-tools-registry.md).
+
+## Cost control — the LLM surfaces & the freeze switch
+The three Vercel-AI-Gateway-credit-bearing reads — Market **Summary** (`routes.ts:101`), global
+**Research** (`:103`), and the daily **Briefing** (`:115`) — are flagged `{ llm: true }` so the cache
+layer can throttle their regeneration (the free-API reads never cost credits). Two levers:
+- **Conditional warmer.** `warmFinanceCache` (`routes.ts:181`) uses `warmIfStale`
+  (`backend/lib/cache.ts:163`) — it refreshes a key only when **missing or stale**, so a server restart
+  (or cron tick) no longer needlessly regenerates still-fresh content. `?force=1` on the cron route
+  (`routes.ts:201`) bypasses this for a manual full refresh.
+- **`FINANCE_LLM_FROZEN=1` (dev only, never on Vercel).** `getOrRefresh` (`cache.ts:118`) serves the
+  three LLM surfaces from cache and **never** regenerates them — the warmer skips them entirely
+  (`cache.ts:172`), and the first page visit populates a surface once, then it's frozen. The boot log
+  prints `[cache] backend=upstash|memory` (`backend/index.ts:756`): `upstash` ⇒ frozen surfaces survive
+  restarts ($0 across restarts); `memory` ⇒ rebuilt once per cold boot.
+
+Why a freeze flag + the existing Redis cache instead of a new Postgres/pgvector cache table:
+[decisions/0006-freeze-llm-surfaces](../decisions/0006-freeze-llm-surfaces-no-new-cache-table.md).
 
 ## Agent chat
 `vertical:"finance"` on `/perplexity_ask` → `streamFinanceAnswer` (`backend/index.ts:152`) → `streamText`

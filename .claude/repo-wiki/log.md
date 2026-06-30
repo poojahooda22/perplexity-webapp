@@ -2,6 +2,22 @@
 
 Append-only, newest at top. Prefix `## [YYYY-MM-DD] <op> | <title>` (so `grep "^## \[" log.md | head` works).
 
+## [2026-06-24] ingest | Freeze LLM finance surfaces + conditional warmer (dev credit-burn fix)
+Stopped repeated dev restarts from re-burning Vercel AI Gateway credits on the LLM finance reads
+(summary/research/briefing). No new persistence table — solved in the existing Redis cache:
+- `backend/lib/cache.ts`: `llmFrozen`/`RefreshOpts` (`:45,:49`); freeze short-circuit in `getOrRefresh`
+  (`:118`, serves cached, never regenerates, honest `stale`); new `warmIfStale` (`:163`) refreshes only
+  missing/stale and skips frozen LLM keys (`:172`).
+- `backend/finance/routes.ts`: `readRoute`/`marketReadRoute` take `RefreshOpts` (`:45,:59`); summary/
+  research/briefing flagged `{llm:true}` (`:101,:103,:115`); `WARM_JOBS` tuple +isLLM (`:151`),
+  `warmFinanceCache(force)` via `warmIfStale` (`:181`); cron `?force=1` manual refresh (`:201`).
+- `backend/index.ts`: boot log `[cache] backend=upstash|memory` + frozen state (`:756`).
+- New ADR 0006 (rejected a pgvector/Postgres cache table — wrong tool; Redis already keys these).
+- Also backfilled the routes table with the previously-unlisted Market Insights routes
+  (recession/gdelt/mood/briefing/scorecard + scorecard crons) and corrected drifted finance line numbers.
+Touched: index.md, features/finance.md, entities/routes.md, flows/finance-quote-flow.md,
+decisions/0006-freeze-llm-surfaces-no-new-cache-table.md, log.md.
+
 ## [2026-06-24] ingest | Insights tests + Health/Academic Discover fixes
 Tests added for the Finance→Insights ("Pulse") feature (backend 18 + frontend 8; no feature code changed)
 and three Discover fixes shipped + verified live:
